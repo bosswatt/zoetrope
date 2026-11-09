@@ -1,0 +1,2268 @@
+<!DOCTYPE html>
+<!-- ZOETROPE r3 — GIF → ASCII GIF · animated SVG · one file, zero dependencies
+     r3: ASCII GIF output — every frame set in type (the ASCII RASTERIZER v2 ramps), drawn with a built-in 5×7 face and written by a built-in GIF89a encoder
+     r2, carried over whole: REEL r2 decoder + LINEFINDER v3 detail cut (CHESHIRE r1 gates) + pure SMIL opacity switching · crop · frames to ALL · grid to 448 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>ZOETROPE r3 — GIF → ASCII GIF · animated SVG</title>
+<style>
+:root{--bg:#F5F5F0;--fg:#1A1A1A;--fg2:#555555;--meta:#888888;--inset:#E8E8E4;--line:#CCCCCC;--acc:#C2410C}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg);-webkit-text-size-adjust:100%}
+body{color:var(--fg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.35;
+  padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)}
+.wrap{max-width:960px;margin:0 auto;padding:0 14px 40px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 12px;padding:14px 0 10px;border-bottom:2px solid var(--fg)}
+h1{font-size:24px;font-weight:800;letter-spacing:.14em}
+.rev{font-size:13px;letter-spacing:.12em;color:var(--meta)}
+.tag{flex-basis:100%;font-size:13px;color:var(--fg2)}
+main{display:grid;gap:12px;padding-top:12px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button:disabled{cursor:default}
+
+/* ---- stage: the thing they came to see ---- */
+#stage{position:relative;background:var(--inset);border:2px solid var(--fg);min-height:240px;display:flex;align-items:center;justify-content:center;overflow:hidden;
+  user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+#stage.empty{border-style:dashed;cursor:pointer}
+#stage.drag{background:#DCDCD6}
+#empty{text-align:center;padding:48px 16px}
+#empty .big{font-size:22px;font-weight:800;letter-spacing:.14em}
+#empty .sub{font-size:13px;color:var(--fg2);margin-top:8px}
+#view{position:relative;width:100%;margin:0 auto;display:none;background:#fff;overflow:hidden}
+#view.on{display:block}
+#view svg{display:block;width:100%;height:100%}
+#view img{position:absolute;left:0;top:0;width:100%;height:100%;display:none}
+#view.src img,#view.peek img{display:block}
+#view.src svg{display:none}
+#view.peek svg{visibility:hidden}
+#hint{position:absolute;left:8px;bottom:6px;font-size:11px;letter-spacing:.1em;color:var(--meta);pointer-events:none;display:none}
+#stage.done #hint{display:block}
+#prog{height:6px;background:var(--inset);border:1px solid var(--line);margin-top:-6px}
+#progBar{height:100%;width:0;background:var(--fg);transition:width .15s linear}
+
+/* ---- crop mode ---- */
+#cropUI{position:absolute;inset:0;display:none;touch-action:none}
+#view.crop #cropUI{display:block}
+#view.crop{overflow:visible}
+body.cropping #stage{padding:30px}
+#cropBox{position:absolute;border:2px solid var(--acc);box-shadow:0 0 0 4000px rgba(26,26,26,.55);cursor:move}
+#cropBox .ch{position:absolute;width:56px;height:56px;display:flex;align-items:center;justify-content:center}
+#cropBox .ch::after{content:"";display:block;background:var(--acc);border:2px solid #fff;border-radius:3px}
+#cropBox .n,#cropBox .s{left:50%;margin-left:-28px}
+#cropBox .e,#cropBox .w{top:50%;margin-top:-28px}
+#cropBox .n{top:-28px}#cropBox .s{bottom:-28px}#cropBox .e{right:-28px}#cropBox .w{left:-28px}
+#cropBox .n::after,#cropBox .s::after{width:34px;height:10px}
+#cropBox .e::after,#cropBox .w::after{width:10px;height:34px}
+#cropBox .n,#cropBox .s{cursor:ns-resize}#cropBox .e,#cropBox .w{cursor:ew-resize}
+#cropLbl{position:absolute;left:0;top:-26px;font-size:12px;font-weight:700;letter-spacing:.08em;color:#fff;background:var(--acc);padding:2px 6px;white-space:nowrap}
+
+/* ---- buttons ---- */
+.row{display:flex;gap:8px}
+.btn{flex:1;min-height:56px;border:2px solid var(--fg);font-weight:700;letter-spacing:.08em;font-size:15px;background:var(--bg);padding:0 6px}
+.btn.primary{background:var(--fg);color:#fff}
+.btn:disabled{opacity:.3}
+.btn.warn{border-color:var(--acc);color:var(--acc)}
+.btn.acc{background:var(--acc);border-color:var(--acc);color:#fff}
+#cropRow{display:none}
+body.cropping #actRow{display:none}
+body.cropping #cropRow{display:flex}
+#transport .btn{flex:0 0 72px}
+#transport #play{flex:1}
+#counter{flex:0 0 auto;min-width:96px;padding-right:4px;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;align-self:center;color:var(--fg2)}
+
+/* ---- readouts ---- */
+#status{font-size:13px;color:var(--fg2);min-height:18px}
+#status.err{color:var(--acc);font-weight:700}
+#readout{font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;min-height:18px}
+
+/* ---- frame strip ---- */
+#strip{display:flex;gap:6px;overflow-x:auto;padding:4px 0 8px;scrollbar-width:thin}
+#strip:empty{display:none}
+.thumb{flex:0 0 auto;width:72px;height:72px;border:2px dashed var(--line);background:var(--inset);position:relative;display:flex;align-items:center;justify-content:center;padding:3px}
+.thumb canvas{max-width:100%;max-height:100%;opacity:.25}
+.thumb.has canvas{opacity:.45}
+.thumb.done{border:2px solid var(--fg)}
+.thumb.done canvas{opacity:1}
+.thumb.cur{outline:3px solid var(--acc);outline-offset:-3px}
+.thumb span{position:absolute;right:3px;bottom:0;font-size:11px;color:var(--meta);font-variant-numeric:tabular-nums}
+
+/* ---- settings ---- */
+.set{display:grid;gap:4px}
+.lbl{font-size:12px;letter-spacing:.14em;color:var(--fg2)}
+.lbl small{letter-spacing:0;color:var(--meta);margin-left:6px}
+.seg{display:flex;border:2px solid var(--fg)}
+.seg button{flex:1;min-height:56px;font-weight:700;letter-spacing:.04em;border-right:2px solid var(--fg);background:var(--bg);padding:0 2px}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--fg);color:#fff}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:520px){.grid2{grid-template-columns:1fr}}
+
+footer{margin-top:28px;padding-top:12px;border-top:2px solid var(--fg);font-size:13px;color:var(--fg2);line-height:1.5}
+footer b{color:var(--fg)}
+
+/* ---- r3: the ASCII stage + the two outputs ---- */
+#view canvas{display:none;width:100%;height:auto}
+#view.asc canvas{display:block}
+#view.asc #svgHost{display:none}
+#view.src canvas{display:none}
+#view.peek canvas{visibility:hidden}
+#settings{display:grid;gap:12px}
+body.cropping #settings{opacity:.3;pointer-events:none}
+body.m-ascii .only-svg,body.m-svg .only-ascii{display:none}
+#hint{background:rgba(245,245,240,.9);padding:1px 6px;color:var(--fg2)}
+#progBar{width:100%;transform:scaleX(0);transform-origin:0 50%;transition:transform .3s linear}
+</style>
+</head>
+<body class="m-ascii">
+<div class="wrap">
+<header>
+  <h1>ZOETROPE</h1><span class="rev">r3 · GIF → ASCII GIF · ANIMATED SVG</span>
+  <div class="tag">A GIF goes in. r3 sets every frame in type and hands back a GIF made of characters — or, as in r2, one animated SVG cut with LINEFINDER · DETAIL. The typeface and the GIF writer are inside this file: no dependencies, nothing leaves the device.</div>
+</header>
+
+<main>
+  <div id="stage" class="empty">
+    <div id="empty"><div class="big">OPEN A GIF</div><div class="sub">tap here · or drop a .gif on the stage</div></div>
+    <div id="view">
+      <div id="svgHost"></div><canvas id="asc" width="1" height="1"></canvas><img id="peek" alt="">
+      <div id="cropUI"><div id="cropBox"><div id="cropLbl"></div>
+        <div class="ch n" data-h="n"></div><div class="ch s" data-h="s"></div><div class="ch e" data-h="e"></div><div class="ch w" data-h="w"></div>
+      </div></div>
+    </div>
+    <div id="hint">TAP · PAUSE &nbsp;&nbsp; HOLD · SOURCE GIF</div>
+  </div>
+  <div id="prog"><div id="progBar"></div></div>
+
+  <div id="actRow" class="row">
+    <button id="btnOpen" class="btn">OPEN</button>
+    <button id="btnCrop" class="btn" disabled>CROP</button>
+    <button id="btnConvert" class="btn" disabled>CONVERT</button>
+    <button id="btnSave" class="btn primary" disabled>SAVE</button>
+  </div>
+  <div id="cropRow" class="row">
+    <button id="btnCropClear" class="btn">FULL FRAME</button>
+    <button id="btnCropCancel" class="btn">CANCEL</button>
+    <button id="btnCropApply" class="btn acc">APPLY + CUT</button>
+  </div>
+  <input id="file" type="file" accept="image/gif,.gif" hidden>
+
+  <div id="status">Waiting for a GIF.</div>
+  <div id="readout"></div>
+
+  <div id="transport" class="row">
+    <button id="prev" class="btn" disabled>◀</button>
+    <button id="play" class="btn" disabled>PAUSE</button>
+    <button id="next" class="btn" disabled>▶</button>
+    <div id="counter">— / —</div>
+  </div>
+
+  <div id="strip"></div>
+
+  <div id="settings">
+    <div class="set"><div class="lbl">OUTPUT <small>what the reel becomes</small></div>
+      <div class="seg" data-key="out"><button data-v="ascii" class="on">ASCII GIF</button><button data-v="svg">ANIMATED SVG</button></div></div>
+
+    <div class="grid2">
+      <div class="set only-ascii"><div class="lbl">COLUMNS <small>characters across · rows follow the picture</small></div>
+        <div class="seg" data-key="cols"><button data-v="60">60</button><button data-v="80">80</button><button data-v="100" class="on">100</button><button data-v="150">150</button><button data-v="200">200</button></div></div>
+      <div class="set only-ascii"><div class="lbl">CHARSET <small>the three ASCII RASTERIZER ramps</small></div>
+        <div class="seg" data-key="set"><button data-v="standard" class="on">STANDARD</button><button data-v="detailed">DETAILED</button><button data-v="blocks">BLOCKS</button></div></div>
+      <div class="set only-ascii"><div class="lbl">INK <small>COLOR inks each character from the reel · the other three are one ink</small></div>
+        <div class="seg" data-key="ink"><button data-v="color" class="on">COLOR</button><button data-v="mono">MONO</button><button data-v="green">GREEN</button><button data-v="amber">AMBER</button></div></div>
+      <div class="set only-ascii"><div class="lbl">PAPER <small>AUTO follows the reel's own ground</small></div>
+        <div class="seg" data-key="paper"><button data-v="auto" class="on">AUTO</button><button data-v="light">LIGHT</button><button data-v="dark">DARK</button></div></div>
+      <div class="set only-ascii"><div class="lbl">INVERT <small>light and dark trade places · hues stay</small></div>
+        <div class="seg" data-key="inv"><button data-v="0" class="on">NORMAL</button><button data-v="1">INVERTED</button></div></div>
+      <div class="set only-ascii"><div class="lbl">SIZE <small>GIF pixels per type pixel · AUTO keeps the long side at or under 1200 px</small></div>
+        <div class="seg" data-key="size"><button data-v="auto" class="on">AUTO</button><button data-v="1">1×</button><button data-v="2">2×</button><button data-v="3">3×</button></div></div>
+      <div class="set only-ascii"><div class="lbl">FRAMES <small>cap · past it the reel is thinned evenly · ALL keeps every unique frame</small></div>
+        <div class="seg" data-key="acap"><button data-v="48">48</button><button data-v="96">96</button><button data-v="192">192</button><button data-v="384">384</button><button data-v="all" class="on">ALL</button></div></div>
+
+      <div class="set only-svg"><div class="lbl">FRAMES <small>cap · past it the reel is thinned evenly · ALL keeps every unique frame</small></div>
+        <div class="seg" data-key="cap"><button data-v="48">48</button><button data-v="96" class="on">96</button><button data-v="192">192</button><button data-v="384">384</button><button data-v="all">ALL</button></div></div>
+      <div class="set only-svg"><div class="lbl">GRID <small>working long side, px · 224 is the detail cut · 448 is four times the work</small></div>
+        <div class="seg" data-key="grid"><button data-v="144">144</button><button data-v="224" class="on">224</button><button data-v="320">320</button><button data-v="448">448</button></div></div>
+      <div class="set only-svg"><div class="lbl">PALETTE <small>k · AUTO sweeps 10 · 14 · 18, knee-picked</small></div>
+        <div class="seg" data-key="k"><button data-v="auto" class="on">AUTO</button><button data-v="10">10</button><button data-v="14">14</button><button data-v="18">18</button><button data-v="24">24</button></div></div>
+
+      <div class="set"><div class="lbl">SPEED <small>loop rate · re-emits without re-cutting</small></div>
+        <div class="seg" data-key="speed"><button data-v="0.5">½×</button><button data-v="1" class="on">1×</button><button data-v="2">2×</button></div></div>
+    </div>
+
+    <div class="row"><button id="btnCopy" class="btn" disabled>COPY FRAME AS TEXT</button></div>
+  </div>
+</main>
+
+<footer>
+  <b>What r3 adds.</b> A second output: the reel as a GIF made of characters. The GIF is read with REEL r2's parser, each kept frame is laid over a grid of
+  character cells (COLUMNS across; rows follow the picture; a cell is 6 × 8), and each cell's tone picks a character from the chosen ramp. The three ramps are the
+  ASCII RASTERIZER's, character for character; each is re-ordered by the ink its characters really carry in the built-in face, so tone never runs backwards, and a cell
+  leans a little toward its inkiest part so thin strokes do not wash out. The type is then drawn back into pixels with that face — 5 × 7 in a 6 × 8 cell, built
+  into this file, so no font is asked of the device and every device writes the same GIF — and packed by a GIF writer that is also in this file.
+  <br><br>
+  <b>Fitted once for the reel, not per frame.</b> Levels: the reel's 0.5 % – 99.5 % tones become the full range. Paper: AUTO sets a mostly light reel dark-on-light and a
+  dark reel light-on-dark, so the ground stays blank and the ink is the picture. Ink: COLOR gives each character the least ink that makes its cell's color on that
+  paper, from one palette of up to 62 inks fitted across the whole reel; MONO, GREEN and AMBER are one ink. INVERT trades light for dark and keeps the hues, so
+  a white-ground diagram becomes the same diagram on black. Nothing pumps or re-tints between frames.
+  <br><br>
+  <b>Kept still.</b> A cell keeps last frame's character and ink while they still fit, so flat areas do not shimmer. Each frame after the first is written as only the
+  box of cells that changed, with unchanged cells inside it left transparent; frames that set to identical type become one longer hold. SPEED rewrites the delays and
+  the three single inks rewrite the color table — nothing is set or packed again; SIZE packs the same type at a new pixel size; everything else re-sets the reel, and
+  the scan is kept while the crop stays.
+  <br><br>
+  <b>The GIF it writes.</b> GIF89a, one global color table, loops forever. Width and height are whole cells: COLUMNS × 6 and rows × 8, times SIZE. Delays are the
+  source's, in hundredths of a second, never under 20 ms (browsers slow anything faster). COPY FRAME AS TEXT puts the frame on the stage on the clipboard as plain
+  text, one line per row. The stage plays the same cells the file holds — pause, step and scrub work as they do for the SVG.
+  <br><br>
+  <b>The SVG it writes — r2, unchanged.</b> Every kept frame is cut with LINEFINDER v3 exactly as CHESHIRE r1 cuts its DETAIL pass: a 224 px working grid
+  (144 · 320 · 448 on offer), the palette swept 10 · 14 · 18 and knee-picked by LINEFINDER's own sanity check, regions down to five ten-thousandths of the frame
+  allowed to live, Douglas-Peucker ε 0.8, no 90° snap; the palette is fitted once across the reel and the sweep is graded on three frames. One
+  <code>&lt;g&gt;</code> per frame, each carrying a single <code>&lt;animate attributeName="opacity" calcMode="discrete"&gt;</code> that turns it on for its slice of
+  the loop; frames after the first start at opacity 0, so a viewer with no SMIL shows frame 1 as a still. Width and height are the crop's pixels; the viewBox is the
+  working grid.
+  <br><br>
+  <b>Crop and frames — both outputs.</b> Crop is set on the source, in GIF pixels, and applied at the cut. Identical consecutive frames are merged into one hold,
+  judged inside the crop. Past the FRAMES cap the reel is thinned evenly by index and each kept frame inherits the time of the frames it stands in for, so the loop
+  stays as long as the GIF; ALL keeps every unique frame. Delays under 20 ms read as 100 ms, the way browsers read them. Frames are decoded when they are reached,
+  so a big reel costs its compressed size in memory and little more. The ASCII output re-reads the reel whenever a setting changes, so it unpacks frames with a
+  faster table-driven reader that follows REEL r2's rules step for step.
+</footer>
+</div>
+
+<script>
+/* =====================================================================
+   GIF DECODE — carried from raid-reel-r2 (REEL r2 decode module, 51-test
+   suite): lzwDecode · interlaceOrder · deinterlace · parseGif. r2 change:
+   parseGif keeps each frame's LZW stream and decodes it when the reel walk
+   reaches that frame, so memory holds the compressed GIF and one canvas.
+   coalesce keeps the same disposal logic, restated as a generator.
+   ===================================================================== */
+const GIF=(function(){
+"use strict";
+function lzwDecode(mcs, data, npix) {
+  const cc = 1 << mcs, eoi = cc + 1;
+  let cs, dict, next;
+  const reset = () => {
+    dict = [];
+    for (let i = 0; i < cc; i++) dict.push([i]);
+    dict.push(null); dict.push(null);        // clear, eoi placeholders
+    next = eoi + 1; cs = mcs + 1;
+  };
+  reset();
+  let bit = 0;
+  const maxBit = data.length * 8;
+  const read = () => {
+    let v = 0;
+    for (let i = 0; i < cs; i++) {
+      if (bit >= maxBit) return eoi;         // ran out: treat as end
+      if ((data[bit >> 3] >> (bit & 7)) & 1) v |= (1 << i);
+      bit++;
+    }
+    return v;
+  };
+  const out = new Uint8Array(npix);
+  let op = 0, prev = null;
+  while (op < npix) {
+    const code = read();
+    if (code === cc) { reset(); prev = null; continue; }
+    if (code === eoi) break;
+    let entry;
+    if (code < next && dict[code]) entry = dict[code];
+    else if (code === next && prev) entry = prev.concat([prev[0]]);
+    else break;                              // corrupt stream: keep what we have
+    for (let i = 0; i < entry.length && op < npix; i++) out[op++] = entry[i];
+    if (prev && next < 4096) {
+      dict.push(prev.concat([entry[0]]));
+      next++;
+      if (next === (1 << cs) && cs < 12) cs++;
+    }
+    prev = entry;
+  }
+  return out;                                // short streams leave trailing 0s
+}
+function interlaceOrder(h) {
+  const rows = [];
+  for (let y = 0; y < h; y += 8) rows.push(y);
+  for (let y = 4; y < h; y += 8) rows.push(y);
+  for (let y = 2; y < h; y += 4) rows.push(y);
+  for (let y = 1; y < h; y += 2) rows.push(y);
+  return rows;
+}
+function deinterlace(idx, w, h) {
+  const out = new Uint8Array(idx.length);
+  const order = interlaceOrder(h);
+  for (let i = 0; i < order.length; i++) out.set(idx.subarray(i * w, (i + 1) * w), order[i] * w);
+  return out;
+}
+function parseGif(bytes) {
+  let p = 0;
+  const need = n => { if (p + n > bytes.length) throw new Error('GIF truncated at byte ' + p); };
+  const u8 = () => { need(1); return bytes[p++]; };
+  const u16 = () => { need(2); const v = bytes[p] | (bytes[p + 1] << 8); p += 2; return v; };
+  const take = n => { need(n); const s = bytes.slice(p, p + n); p += n; return s; };
+  const skipSub = () => { for (;;) { const n = u8(); if (n === 0) return; need(n); p += n; } };
+
+  need(6);
+  const hdr = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]);
+  p = 6;
+  if (hdr !== 'GIF89a' && hdr !== 'GIF87a') throw new Error('Not a GIF file');
+  const width = u16(), height = u16();
+  const lsdPacked = u8();
+  p += 2;                                    // bg index, aspect
+  let gct = null;
+  if (lsdPacked & 0x80) gct = take((2 << (lsdPacked & 7)) * 3);
+
+  const frames = [];
+  let gce = null;
+  for (;;) {
+    if (p >= bytes.length) break;            // tolerate missing trailer
+    const b = u8();
+    if (b === 0x3B) break;                   // trailer
+    if (b === 0x00) continue;                // stray padding
+    if (b === 0x21) {                        // extension
+      const label = u8();
+      if (label === 0xF9) {                  // graphic control
+        const n = u8();
+        const blk = take(n);
+        const pk = blk[0] | 0;
+        gce = {
+          disposal: (pk >> 2) & 7,
+          transp: (pk & 1) ? (blk[3] | 0) : -1,
+          delayCs: (blk[1] | 0) | ((blk[2] | 0) << 8),
+        };
+        skipSub();
+      } else {
+        skipSub();                           // app / comment / plain text: uniform skip
+      }
+      continue;
+    }
+    if (b === 0x2C) {                        // image descriptor
+      const left = u16(), top = u16(), w = u16(), h = u16();
+      const pk = u8();
+      let pal = gct;
+      if (pk & 0x80) pal = take((2 << (pk & 7)) * 3);
+      if (!pal) throw new Error('GIF frame has no palette');
+      const interlaced = !!(pk & 0x40);
+      const mcs = u8();
+      const parts = []; let total = 0;
+      for (;;) { const n = u8(); if (n === 0) break; parts.push(take(n)); total += n; }
+      const data = new Uint8Array(total);
+      let o = 0;
+      for (const q of parts) { data.set(q, o); o += q.length; }
+      if (!(w > 0 && h > 0)) { gce = null; continue; }
+      frames.push({
+        left, top, w, h,
+        palette: pal,
+        lzw: data, mcs, interlaced,          // decoded on demand by coalesceIter
+        transpIndex: gce ? gce.transp : -1,
+        disposal: gce ? gce.disposal : 0,
+        delayCs: gce ? gce.delayCs : 10,
+      });
+      gce = null;
+      continue;
+    }
+    throw new Error('Unknown GIF block 0x' + b.toString(16));
+  }
+  if (!frames.length) throw new Error('No frames found in GIF');
+  return { width, height, frames };
+}
+function frameIndices(f) {
+  let idx = lzwDecode(f.mcs, f.lzw, f.w * f.h);
+  if (f.interlaced) idx = deinterlace(idx, f.w, f.h);
+  return idx;
+}
+/* patches + disposal -> full-frame RGBA snapshots. Yields the live buffer:
+   take what you need from `full` before asking for the next frame. */
+function* coalesceIter(parsed) {
+  const W = parsed.width, H = parsed.height;
+  let full = new Uint8ClampedArray(W * H * 4);
+  let prevSnap = null, lastDisp = 0, lastRect = null;
+  let tMs = 0, count = 0;
+  for (const f of parsed.frames) {
+    if (lastRect) {
+      if (lastDisp === 2) {                  // restore to background = transparent
+        const x0 = Math.max(0, lastRect.left), y0 = Math.max(0, lastRect.top);
+        const x1 = Math.min(W, lastRect.left + lastRect.w), y1 = Math.min(H, lastRect.top + lastRect.h);
+        for (let y = y0; y < y1; y++) {
+          const row = (y * W + x0) * 4;
+          full.fill(0, row, row + (x1 - x0) * 4);
+        }
+      } else if (lastDisp === 3 && prevSnap) {
+        full = prevSnap.slice();             // restore to previous
+      }
+    }
+    if (f.disposal === 3) prevSnap = full.slice();   // save state BEFORE drawing
+    const indices = frameIndices(f);
+    for (let y = 0; y < f.h; y++) {
+      const gy = f.top + y;
+      if (gy < 0 || gy >= H) continue;
+      for (let x = 0; x < f.w; x++) {
+        const gx = f.left + x;
+        if (gx < 0 || gx >= W) continue;
+        const idx = indices[y * f.w + x];
+        if (idx === f.transpIndex) continue; // transparent pixels leave prior content
+        const pi = idx * 3, o = (gy * W + gx) * 4;
+        full[o] = f.palette[pi]; full[o + 1] = f.palette[pi + 1]; full[o + 2] = f.palette[pi + 2];
+        full[o + 3] = 255;
+      }
+    }
+    const delayMs = (f.delayCs < 2 ? 10 : f.delayCs) * 10;   // browser convention
+    yield { full, tMs, delayMs, i: count };
+    count++;
+    tMs += delayMs;
+    lastDisp = f.disposal;
+    lastRect = { left: f.left, top: f.top, w: f.w, h: f.h };
+  }
+}
+return {parseGif,coalesceIter,lzwDecode};
+})();
+if(typeof globalThis!=="undefined")globalThis.GIF=GIF;
+</script>
+
+<script>
+/* =====================================================================
+   LINEFINDER v3 CORE — carried from apex-cheshire-r1 (unchanged from zoetrope-r1) (LF3 CORE, itself
+   verbatim from linefinder-v3_0). One change for animation: quantize is
+   split into fitPalette (median-cut seeds + Lloyd + dedupe, on a sample
+   drawn across every frame) and labelWith (nearest center, per frame),
+   so the whole reel shares one palette. absorbIslands collects each
+   island's pixels in one pass instead of rescanning the frame per
+   island — same result, one order faster on busy frames.
+   ===================================================================== */
+const LF=(function(){
+"use strict";
+function makeRaster(w,h,fill){
+  const r={w,h,data:new Uint8ClampedArray(w*h*4)};
+  if(fill)for(let i=0;i<w*h;i++){const o=i*4;r.data[o]=fill[0];r.data[o+1]=fill[1];r.data[o+2]=fill[2];r.data[o+3]=255;}
+  else for(let i=3;i<w*h*4;i+=4)r.data[i]=255;
+  return r;
+}
+function boxDownscale(src,maxDim){
+  const sc=Math.min(1,maxDim/Math.max(src.w,src.h));
+  const w=Math.max(1,Math.round(src.w*sc)),h=Math.max(1,Math.round(src.h*sc));
+  if(w===src.w&&h===src.h){const r=makeRaster(w,h);r.data.set(src.data);return r;}
+  const r=makeRaster(w,h),d=r.data,sd=src.data;
+  for(let y=0;y<h;y++){
+    const sy0=Math.floor(y*src.h/h),sy1=Math.max(sy0+1,Math.floor((y+1)*src.h/h));
+    for(let x=0;x<w;x++){
+      const sx0=Math.floor(x*src.w/w),sx1=Math.max(sx0+1,Math.floor((x+1)*src.w/w));
+      let cr=0,cg=0,cb=0,n=0;
+      for(let sy=sy0;sy<sy1;sy++){const row=sy*src.w;
+        for(let sx=sx0;sx<sx1;sx++){const o=(row+sx)*4;cr+=sd[o];cg+=sd[o+1];cb+=sd[o+2];n++;}}
+      const o=(y*w+x)*4;d[o]=cr/n;d[o+1]=cg/n;d[o+2]=cb/n;d[o+3]=255;
+    }
+  }
+  return r;
+}
+function hex(c){return "#"+[0,1,2].map(i=>Math.max(0,Math.min(255,Math.round(c[i]))).toString(16).padStart(2,"0")).join("");}
+function colDist(a,b){const dr=a[0]-b[0],dg=a[1]-b[1],db=a[2]-b[2];return Math.sqrt(dr*dr+dg*dg+db*db);}
+function r1(v){return Math.round(v*10)/10;}
+
+/* ---------- OKLab — cluster where distance means what eyes mean ---------- */
+const CHROMA_W=1.7;
+function s2l(c){c/=255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);}
+function rgbToOk(r,g,b){
+  const R=s2l(r),G=s2l(g),B=s2l(b);
+  const l=Math.cbrt(0.4122214708*R+0.5363325363*G+0.0514459929*B);
+  const m=Math.cbrt(0.2119034982*R+0.6806995451*G+0.1073969566*B);
+  const s=Math.cbrt(0.0883024619*R+0.2817188376*G+0.6299787005*B);
+  return [0.2104542553*l+0.7936177850*m-0.0040720468*s,
+          (1.9779984951*l-2.4285922050*m+0.4505937099*s)*CHROMA_W,
+          (0.0259040371*l+0.7827717662*m-0.8086757660*s)*CHROMA_W];
+}
+function rasterToOk(r){
+  const n=r.w*r.h,d=r.data,ok=new Float32Array(n*3);
+  for(let i=0;i<n;i++){const o=i*4,v=rgbToOk(d[o],d[o+1],d[o+2]);ok[i*3]=v[0];ok[i*3+1]=v[1];ok[i*3+2]=v[2];}
+  return ok;
+}
+/* stride sample drawn evenly across every raster — one palette for the whole reel */
+function sampleOk(rasters,target){
+  let total=0;for(const r of rasters)total+=r.w*r.h;
+  const stride=Math.max(1,Math.floor(total/target));
+  const pts=[];
+  for(const r of rasters){const n=r.w*r.h,d=r.data;
+    for(let i=0;i<n;i+=stride){const o=i*4,v=rgbToOk(d[o],d[o+1],d[o+2]);pts.push(v[0],v[1],v[2]);}}
+  return Float32Array.from(pts);
+}
+/* r2: the same stride sample, taken one frame at a time while the reel streams past.
+   The stride is made coprime with the row width so the sample walks every column
+   (a stride that divides the width samples the same few columns forever and can
+   miss a small thing entirely), and each frame starts at its own phase. */
+function gcd(a,b){while(b){const t=a%b;a=b;b=t;}return a;}
+function sampleInto(pts,r,count,phase){
+  const n=r.w*r.h,d=r.data;
+  let stride=Math.max(1,Math.floor(n/count));
+  while(stride>1&&gcd(stride,r.w)!==1)stride++;
+  for(let i=(phase||0)%stride;i<n;i+=stride){const o=i*4,v=rgbToOk(d[o],d[o+1],d[o+2]);pts.push(v[0],v[1],v[2]);}
+}
+
+/* ---------- palette — median cut seeds + Lloyd + dedupe, deterministic ---------- */
+function fitPalette(ok,k){
+  const m=(ok.length/3)|0;
+  const idx=[];for(let i=0;i<m;i++)idx.push(i);
+  let boxes=[idx];
+  while(boxes.length<k){
+    let bi=-1,bc=-1,br=-1;
+    for(let b=0;b<boxes.length;b++){
+      if(boxes[b].length<2)continue;
+      for(let c=0;c<3;c++){
+        let mn=1e9,mx=-1e9;
+        for(const i of boxes[b]){const v=ok[i*3+c];if(v<mn)mn=v;if(v>mx)mx=v;}
+        if(mx-mn>br){br=mx-mn;bi=b;bc=c;}
+      }
+    }
+    if(bi<0||br<=1e-6)break;
+    const box=boxes[bi];box.sort((p,q)=>ok[p*3+bc]-ok[q*3+bc]);
+    const mid=box.length>>1;
+    boxes.splice(bi,1,box.slice(0,mid),box.slice(mid));
+  }
+  let centers=boxes.map(b=>{
+    let x=0,y=0,z=0;for(const i of b){x+=ok[i*3];y+=ok[i*3+1];z+=ok[i*3+2];}
+    return [x/b.length,y/b.length,z/b.length];
+  });
+  for(let it=0;it<10;it++){
+    const acc=centers.map(()=>[0,0,0,0]);
+    for(const i of idx){
+      let bi=0,bd=Infinity;
+      for(let c=0;c<centers.length;c++){
+        const dx=ok[i*3]-centers[c][0],dy=ok[i*3+1]-centers[c][1],dz=ok[i*3+2]-centers[c][2];
+        const dist=dx*dx+dy*dy+dz*dz;
+        if(dist<bd){bd=dist;bi=c;}
+      }
+      const a=acc[bi];a[0]+=ok[i*3];a[1]+=ok[i*3+1];a[2]+=ok[i*3+2];a[3]++;
+    }
+    centers=centers.map((c,i)=>acc[i][3]?[acc[i][0]/acc[i][3],acc[i][1]/acc[i][3],acc[i][2]/acc[i][3]]:c);
+  }
+  /* dedupe: forcing k onto an image with fewer real colors leaves
+     phantom edge-blend clusters — merge centers closer than MERGE_EPS
+     (weighted by population) until every survivor is visually distinct */
+  const MERGE_EPS=0.033;
+  {
+    const cnt=new Array(centers.length).fill(0);
+    for(const i of idx){
+      let bi=0,bd=Infinity;
+      for(let c=0;c<centers.length;c++){
+        const dx=ok[i*3]-centers[c][0],dy=ok[i*3+1]-centers[c][1],dz=ok[i*3+2]-centers[c][2];
+        const dist=dx*dx+dy*dy+dz*dz;
+        if(dist<bd){bd=dist;bi=c;}
+      }
+      cnt[bi]++;
+    }
+    let live=centers.map((c,i)=>({c,n:cnt[i]})).filter(e=>e.n>0);
+    for(;;){
+      let pi=-1,pj=-1,pd=Infinity;
+      for(let i=0;i<live.length;i++)for(let j=i+1;j<live.length;j++){
+        const dx=live[i].c[0]-live[j].c[0],dy=live[i].c[1]-live[j].c[1],dz=live[i].c[2]-live[j].c[2];
+        const d=Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(d<pd){pd=d;pi=i;pj=j;}
+      }
+      if(pd>=MERGE_EPS||pi<0)break;
+      const a=live[pi],b=live[pj],n=a.n+b.n;
+      a.c=[(a.c[0]*a.n+b.c[0]*b.n)/n,(a.c[1]*a.n+b.c[1]*b.n)/n,(a.c[2]*a.n+b.c[2]*b.n)/n];
+      a.n=n;live.splice(pj,1);
+    }
+    centers=live.map(e=>e.c);
+  }
+  return centers;
+}
+function labelWith(ok,n,centers){
+  const labels=new Int16Array(n);
+  for(let i=0;i<n;i++){
+    let bi=0,bd=Infinity;
+    for(let c=0;c<centers.length;c++){
+      const dx=ok[i*3]-centers[c][0],dy=ok[i*3+1]-centers[c][1],dz=ok[i*3+2]-centers[c][2];
+      const dist=dx*dx+dy*dy+dz*dz;
+      if(dist<bd){bd=dist;bi=c;}
+    }
+    labels[i]=bi;
+  }
+  return labels;
+}
+
+/* ---------- label cleanup — mode filter, then absorb sub-threshold islands ---------- */
+function modeFilter(labels,w,h,passes,kMax){
+  let src=labels;
+  const cnt=new Int32Array(kMax);
+  for(let p=0;p<passes;p++){
+    const out=new Int16Array(w*h);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      cnt.fill(0);
+      for(let dy=-1;dy<=1;dy++){const yy=y+dy;if(yy<0||yy>=h)continue;
+        for(let dx=-1;dx<=1;dx++){const xx=x+dx;if(xx<0||xx>=w)continue;
+          cnt[src[yy*w+xx]]++;}}
+      const self=src[y*w+x];let best=self;
+      for(let c=0;c<kMax;c++)if(cnt[c]>cnt[best])best=c;
+      out[y*w+x]=best;
+    }
+    src=out;
+  }
+  return src;
+}
+function componentsOf(labels,w,h){
+  const comp=new Int32Array(w*h).fill(-1),sizes=[],labOf=[],stack=[];
+  for(let s=0;s<w*h;s++){
+    if(comp[s]>=0)continue;
+    const id=sizes.length,lab=labels[s];let cnt=0;
+    stack.length=0;stack.push(s);comp[s]=id;
+    while(stack.length){
+      const i=stack.pop();cnt++;
+      const x=i%w;
+      if(x>0&&comp[i-1]<0&&labels[i-1]===lab){comp[i-1]=id;stack.push(i-1);}
+      if(x<w-1&&comp[i+1]<0&&labels[i+1]===lab){comp[i+1]=id;stack.push(i+1);}
+      if(i>=w&&comp[i-w]<0&&labels[i-w]===lab){comp[i-w]=id;stack.push(i-w);}
+      if(i<w*(h-1)&&comp[i+w]<0&&labels[i+w]===lab){comp[i+w]=id;stack.push(i+w);}
+    }
+    sizes.push(cnt);labOf.push(lab);
+  }
+  return {comp,sizes,labOf};
+}
+function absorbIslands(labels,w,h,minArea,kMax){
+  let lab=labels,absorbedTotal=0;
+  for(let round=0;round<10;round++){
+    const {comp,sizes,labOf}=componentsOf(lab,w,h);
+    const small=[];
+    for(let i=0;i<sizes.length;i++)if(sizes[i]<minArea)small.push(i);
+    if(!small.length)break;
+    small.sort((a,b)=>sizes[a]-sizes[b]);
+    const isSmall=new Uint8Array(sizes.length);for(const id of small)isSmall[id]=1;
+    const px=new Map();for(const id of small)px.set(id,[]);
+    for(let i=0;i<w*h;i++){const c=comp[i];if(isSmall[c])px.get(c).push(i);}
+    const next=new Int16Array(lab);
+    const border=new Int32Array(kMax);
+    let absorbed=0;
+    for(const id of small){
+      border.fill(0);let found=false;
+      const list=px.get(id);
+      for(const i of list){
+        const x=i%w;
+        if(x>0&&comp[i-1]!==id){border[labOf[comp[i-1]]]++;found=true;}
+        if(x<w-1&&comp[i+1]!==id){border[labOf[comp[i+1]]]++;found=true;}
+        if(i>=w&&comp[i-w]!==id){border[labOf[comp[i-w]]]++;found=true;}
+        if(i<w*(h-1)&&comp[i+w]!==id){border[labOf[comp[i+w]]]++;found=true;}
+      }
+      if(!found)continue;
+      let best=0;for(let c=0;c<kMax;c++)if(border[c]>border[best])best=c;
+      for(const i of list)next[i]=best;
+      absorbed++;
+    }
+    lab=next;absorbedTotal+=absorbed;
+    if(!absorbed)break;
+  }
+  return {labels:lab,absorbed:absorbedTotal};
+}
+
+/* ---------- trace — directed boundary edges stitched into loops, outer loop only ---------- */
+function traceRegion(comp,id,w,h){
+  const edges=[],outMap=new Map();
+  const key=(x,y)=>y*(w+1)+x;
+  const addEdge=(x0,y0,x1,y1)=>{
+    const i=edges.length;edges.push({x0,y0,x1,y1,used:false});
+    const kk=key(x0,y0);if(!outMap.has(kk))outMap.set(kk,[]);outMap.get(kk).push(i);
+  };
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    if(comp[y*w+x]!==id)continue;
+    if(y===0||comp[(y-1)*w+x]!==id)addEdge(x+1,y,x,y);
+    if(y===h-1||comp[(y+1)*w+x]!==id)addEdge(x,y+1,x+1,y+1);
+    if(x===0||comp[y*w+x-1]!==id)addEdge(x,y,x,y+1);
+    if(x===w-1||comp[y*w+x+1]!==id)addEdge(x+1,y+1,x+1,y);
+  }
+  const loops=[];
+  for(const e0 of edges){
+    if(e0.used)continue;
+    const pts=[];let e=e0;
+    while(e&&!e.used){
+      e.used=true;pts.push([e.x0,e.y0]);
+      const dx=e.x1-e.x0,dy=e.y1-e.y0;
+      const prefs=[[dy,-dx],[dx,dy],[-dy,dx]];
+      const outs=outMap.get(key(e.x1,e.y1))||[];
+      let next=null;
+      for(const p of prefs){
+        for(const idx of outs){
+          const ed=edges[idx];
+          if(!ed.used&&ed.x1-ed.x0===p[0]&&ed.y1-ed.y0===p[1]){next=ed;break;}
+        }
+        if(next)break;
+      }
+      e=next;
+    }
+    if(pts.length>=4)loops.push(pts);
+  }
+  if(!loops.length)return null;
+  let best=loops[0],bestA=Math.abs(shoelace(loops[0]));
+  for(const l of loops){const a=Math.abs(shoelace(l));if(a>bestA){best=l;bestA=a;}}
+  return best;
+}
+function shoelace(pts){
+  let a=0;
+  for(let i=0;i<pts.length;i++){
+    const [x0,y0]=pts[i],[x1,y1]=pts[(i+1)%pts.length];
+    a+=x0*y1-x1*y0;
+  }
+  return a/2;
+}
+
+/* ---------- simplify — the honest kind ---------- */
+function collinear(pts){
+  const out=[];const n=pts.length;
+  for(let i=0;i<n;i++){
+    const a=pts[(i-1+n)%n],b=pts[i],c=pts[(i+1)%n];
+    const cross=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+    if(Math.abs(cross)>1e-9)out.push(b);
+  }
+  return out.length>=3?out:pts;
+}
+function rdpOpen(pts,eps){
+  if(pts.length<3)return pts.slice();
+  const [ax,ay]=pts[0],[bx,by]=pts[pts.length-1];
+  const dx=bx-ax,dy=by-ay,len=Math.hypot(dx,dy)||1e-9;
+  let mi=-1,md=-1;
+  for(let i=1;i<pts.length-1;i++){
+    const d=Math.abs((pts[i][0]-ax)*dy-(pts[i][1]-ay)*dx)/len;
+    if(d>md){md=d;mi=i;}
+  }
+  if(md<=eps)return [pts[0],pts[pts.length-1]];
+  const L=rdpOpen(pts.slice(0,mi+1),eps),R=rdpOpen(pts.slice(mi),eps);
+  return L.slice(0,-1).concat(R);
+}
+function rdpClosed(pts,eps){
+  if(pts.length<5||eps<=0)return pts.slice();
+  let i0=0,i1=0,best=-1;
+  for(let i=1;i<pts.length;i++){
+    const d=(pts[i][0]-pts[0][0])**2+(pts[i][1]-pts[0][1])**2;
+    if(d>best){best=d;i1=i;}
+  }
+  best=-1;
+  for(let i=0;i<pts.length;i++){
+    const d=(pts[i][0]-pts[i1][0])**2+(pts[i][1]-pts[i1][1])**2;
+    if(d>best){best=d;i0=i;}
+  }
+  if(i0>i1){const t=i0;i0=i1;i1=t;}
+  const A=pts.slice(i0,i1+1),B=pts.slice(i1).concat(pts.slice(0,i0+1));
+  const sA=rdpOpen(A,eps),sB=rdpOpen(B,eps);
+  return sA.slice(0,-1).concat(sB.slice(0,-1));
+}
+function snap90(pts,tolDeg){
+  const tol=Math.tan(tolDeg*Math.PI/180);
+  const p=pts.map(q=>q.slice());
+  for(let pass=0;pass<2;pass++){
+    const n=p.length;
+    for(let i=0;i<n;i++){
+      const a=p[i],b=p[(i+1)%n];
+      const dx=b[0]-a[0],dy=b[1]-a[1];
+      const adx=Math.abs(dx),ady=Math.abs(dy);
+      if(adx<1e-9&&ady<1e-9)continue;
+      if(ady<=adx*tol){const m=(a[1]+b[1])/2;a[1]=m;b[1]=m;}
+      else if(adx<=ady*tol){const m=(a[0]+b[0])/2;a[0]=m;b[0]=m;}
+    }
+  }
+  return collinear(p);
+}
+function simplifyLoop(pts,eps,snap){
+  let p=collinear(pts);
+  if(eps>0)p=rdpClosed(p,eps);
+  p=collinear(p);
+  if(snap&&p.length>=3)p=snap90(p,12);
+  return p.length>=3?p:pts;
+}
+
+/* ---------- region fill: per-channel MEDIAN of source pixels ---------- */
+function medianFill(r,comp,id){
+  const d=r.data,hr=new Int32Array(256),hg=new Int32Array(256),hb=new Int32Array(256);
+  let n=0;
+  for(let i=0;i<comp.length;i++){
+    if(comp[i]!==id)continue;
+    const o=i*4;hr[d[o]]++;hg[d[o+1]]++;hb[d[o+2]]++;n++;
+  }
+  if(!n)return [128,128,128];
+  const med=hh=>{let acc=0;for(let v=0;v<256;v++){acc+=hh[v];if(acc*2>=n)return v;}return 128;};
+  return [med(hr),med(hg),med(hb)];
+}
+function maybeEllipse(comp,id,w,h,area,fill){
+  let x0=w,y0=h,x1=0,y1=0,perim=0;
+  for(let i=0;i<comp.length;i++){
+    if(comp[i]!==id)continue;
+    const x=i%w,y=(i/w)|0;
+    if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
+    if(x===0||comp[i-1]!==id||x===w-1||comp[i+1]!==id||y===0||comp[i-w]!==id||y===h-1||comp[i+w]!==id)perim++;
+  }
+  const bw=x1-x0+1,bh=y1-y0+1,fillRatio=area/(bw*bh);
+  const circ=perim?4*Math.PI*area/(perim*perim):0;
+  const aspect=Math.max(bw,bh)/Math.max(1,Math.min(bw,bh));
+  if(circ>0.82&&fillRatio>0.68&&fillRatio<0.85&&aspect<1.6)
+    return {type:"ellipse",cx:x0+bw/2,cy:y0+bh/2,rx:bw/2*0.98,ry:bh/2*0.98,fill,area};
+  return null;
+}
+
+/* ---------- vectorize the whole map, largest first ---------- */
+function buildShapes(A,labels,w,h,eps,snap){
+  const {comp,sizes}=componentsOf(labels,w,h);
+  const order=sizes.map((s,i)=>i).sort((a,b)=>sizes[b]-sizes[a]);
+  const shapes=[];let verts=0;
+  for(const id of order){
+    const fill=medianFill(A,comp,id);
+    if(shapes.length===0){          /* biggest region = full-bleed base coat */
+      shapes.push({type:"rect",x:0,y:0,w,h,fill,area:sizes[id]});
+      continue;
+    }
+    const ell=maybeEllipse(comp,id,w,h,sizes[id],fill);
+    if(ell){shapes.push(ell);verts+=8;continue;}
+    const loop=traceRegion(comp,id,w,h);
+    if(!loop)continue;
+    const pts=simplifyLoop(loop,eps,snap);
+    shapes.push({type:"poly",pts,fill,area:sizes[id]});
+    verts+=pts.length;
+  }
+  return {shapes,regions:order.length,verts};
+}
+
+/* ---------- SANITY CHECK — rasterize, lay over the source snapshot, score ---------- */
+function fillPolyEO(r,pts,fill){
+  const {w,h}=r,d=r.data,n=pts.length;
+  let y0=h,y1=0;
+  for(const p of pts){if(p[1]<y0)y0=p[1];if(p[1]>y1)y1=p[1];}
+  const yStart=Math.max(0,Math.floor(y0)),yEnd=Math.min(h-1,Math.ceil(y1));
+  const xs=[];
+  for(let y=yStart;y<=yEnd;y++){
+    const yc=y+0.5;xs.length=0;
+    for(let i=0;i<n;i++){
+      const [px,py]=pts[i],[qx,qy]=pts[(i+1)%n];
+      if((py<=yc&&qy>yc)||(qy<=yc&&py>yc))
+        xs.push(px+(yc-py)*(qx-px)/(qy-py));
+    }
+    xs.sort((a,b)=>a-b);
+    for(let i=0;i+1<xs.length;i+=2){
+      const xA=Math.max(0,Math.ceil(xs[i]-0.5)),xB=Math.min(w-1,Math.ceil(xs[i+1]-0.5)-1);
+      for(let x=xA;x<=xB;x++){const o=(y*w+x)*4;d[o]=fill[0];d[o+1]=fill[1];d[o+2]=fill[2];d[o+3]=255;}
+    }
+  }
+}
+function fillEllipse(r,cx,cy,rx,ry,fill){
+  const {w,h}=r,d=r.data;
+  const yA=Math.max(0,Math.floor(cy-ry)),yB=Math.min(h-1,Math.ceil(cy+ry));
+  for(let y=yA;y<=yB;y++){
+    const dy=(y+0.5-cy)/ry;if(Math.abs(dy)>1)continue;
+    const half=rx*Math.sqrt(1-dy*dy);
+    const xA=Math.max(0,Math.ceil(cx-half-0.5)),xB=Math.min(w-1,Math.ceil(cx+half-0.5)-1);
+    for(let x=xA;x<=xB;x++){const o=(y*w+x)*4;d[o]=fill[0];d[o+1]=fill[1];d[o+2]=fill[2];d[o+3]=255;}
+  }
+}
+function rasterizeShapes(shapes,W,H,sw,sh){
+  const r=makeRaster(sw,sh,[128,128,128]),sx=sw/W,sy=sh/H;
+  for(const s of shapes){
+    if(s.type==="poly")fillPolyEO(r,s.pts.map(([x,y])=>[x*sx,y*sy]),s.fill);
+    else if(s.type==="rect")fillPolyEO(r,[[s.x*sx,s.y*sy],[(s.x+s.w)*sx,s.y*sy],[(s.x+s.w)*sx,(s.y+s.h)*sy],[s.x*sx,(s.y+s.h)*sy]],s.fill);
+    else if(s.type==="ellipse")fillEllipse(r,s.cx*sx,s.cy*sy,s.rx*sx,s.ry*sy,s.fill);
+  }
+  return r;
+}
+function blockMeans(r,nAcross){
+  const c=Math.max(2,Math.ceil(Math.max(r.w,r.h)/nAcross));
+  const nx=Math.ceil(r.w/c),ny=Math.ceil(r.h/c);
+  const m=new Float64Array(nx*ny*3),cnt=new Float64Array(nx*ny),d=r.data;
+  for(let y=0;y<r.h;y++){const by=(y/c)|0;
+    for(let x=0;x<r.w;x++){
+      const b=by*nx+((x/c)|0),o=(y*r.w+x)*4;
+      m[b*3]+=d[o];m[b*3+1]+=d[o+1];m[b*3+2]+=d[o+2];cnt[b]++;
+    }}
+  for(let b=0;b<nx*ny;b++)if(cnt[b]){m[b*3]/=cnt[b];m[b*3+1]/=cnt[b];m[b*3+2]/=cnt[b];}
+  return {nx,ny,m};
+}
+function sanityCheck(origSmall,shapes,W,H){
+  const sw=origSmall.w,sh=origSmall.h;
+  const render=rasterizeShapes(shapes,W,H,sw,sh);
+  const a=origSmall.data,b=render.data;
+  let cSum=0;
+  for(let i=0;i<sw*sh;i++){
+    const o=i*4,dr=a[o]-b[o],dg=a[o+1]-b[o+1],db=a[o+2]-b[o+2];
+    cSum+=1-Math.min(1,Math.sqrt(dr*dr+dg*dg+db*db)/300);
+  }
+  const colorScore=cSum/(sw*sh);
+  const BA=blockMeans(origSmall,12),BB=blockMeans(render,12),nb=BA.nx*BA.ny;
+  let oAll=[0,0,0],rAll=[0,0,0];
+  for(let i=0;i<nb;i++)for(let c=0;c<3;c++){oAll[c]+=BA.m[i*3+c]/nb;rAll[c]+=BB.m[i*3+c]/nb;}
+  let sSum=0,salient=0,matched=0;
+  for(let i=0;i<nb;i++){
+    const bo=[BA.m[i*3],BA.m[i*3+1],BA.m[i*3+2]],br=[BB.m[i*3],BB.m[i*3+1],BB.m[i*3+2]];
+    sSum+=1-Math.min(1,colDist(bo,br)/300);
+    if(colDist(bo,oAll)>45){
+      salient++;
+      if(colDist(br,rAll)>28&&colDist(bo,br)<95)matched++;
+    }
+  }
+  const structScore=sSum/nb;
+  const featScore=salient?matched/salient:1;
+  const score=0.5*colorScore+0.3*structScore+0.2*featScore;
+  return {score,colorScore,structScore,featScore,render};
+}
+
+/* ---------- one full segmentation of a frame against a fixed palette ---------- */
+function segmentWith(A,centers,opts){
+  const {w,h}=A,n=w*h,k=centers.length;
+  const labels=labelWith(rasterToOk(A),n,centers);
+  let lab=modeFilter(labels,w,h,2,k);
+  const minArea=Math.max(12,Math.round(w*h*opts.speckle));
+  const ab=absorbIslands(lab,w,h,minArea,k);
+  const built=buildShapes(A,ab.labels,w,h,opts.eps,opts.snap);
+  return {k,absorbed:ab.absorbed,minArea,...built};
+}
+
+return {makeRaster,boxDownscale,hex,r1,sampleOk,sampleInto,fitPalette,segmentWith,sanityCheck,rasterizeShapes};
+})();
+if(typeof globalThis!=="undefined")globalThis.LF=LF;
+</script>
+
+<script>
+/* =====================================================================
+   SVG CUT — zoetrope-r2's scan · cut · SMIL emit, carried over whole (pure, node-testable)
+   The reel is walked twice: once to plan, sample and store a few probe
+   frames, once to cut. Nothing but the cut shapes is kept between
+   frames, so a 50 MB reel costs what it costs on disk.
+   ===================================================================== */
+const ZO=(function(){
+"use strict";
+/* CHESHIRE r1's detail-cut gates, verbatim */
+const HD={fit:224,ks:[10,14,18],speckle:0.0005,eps:0.8,snap:false,knee:0.012};
+const now=()=>(typeof performance!=="undefined"?performance.now():Date.now());
+
+/* ---------- crop rectangle, in GIF pixels ---------- */
+function normCrop(parsed,crop){
+  const W=parsed.width,H=parsed.height;
+  if(!crop)return {x:0,y:0,w:W,h:H,full:true};
+  const x=Math.max(0,Math.min(W-1,Math.round(crop.x))),y=Math.max(0,Math.min(H-1,Math.round(crop.y)));
+  const w=Math.max(1,Math.min(W-x,Math.round(crop.w))),h=Math.max(1,Math.min(H-y,Math.round(crop.h)));
+  return {x,y,w,h,full:(x===0&&y===0&&w===W&&h===H)};
+}
+/* 2×32-bit fingerprint of the crop window — identical consecutive frames become one hold */
+function fingerprint(full,W,r){
+  const u=new Uint32Array(full.buffer,full.byteOffset,full.length>>2);
+  let a=2166136261|0,b=0,n=0;
+  for(let y=r.y;y<r.y+r.h;y++){const row=y*W+r.x;
+    for(let i=row;i<row+r.w;i++){const v=u[i]|0;a=Math.imul(a^v,16777619);b=(b+Math.imul(v,2654435761)+(n++))|0;}}
+  return (a>>>0)+":"+(b>>>0);
+}
+/* the crop window as a raster — no copy when the crop is the full frame (consume before the next frame) */
+function cropRaster(full,W,r){
+  if(r.full)return {w:r.w,h:r.h,data:full};
+  const out=new Uint8ClampedArray(r.w*r.h*4);
+  for(let y=0;y<r.h;y++){const s=((r.y+y)*W+r.x)*4;out.set(full.subarray(s,s+r.w*4),y*r.w*4);}
+  return {w:r.w,h:r.h,data:out};
+}
+
+/* ---------- pass 1 · SCAN — one walk does three jobs: fingerprints merge identical
+   holds and count the unique frames; a reel-wide OKLab sample is drawn for the one
+   palette; the working raster is kept for a handful of probe frames (every power-of-two
+   unique frame, plus the last) so the k sweep can be graded before the cut begins.
+   The result depends only on crop + grid, so a caller can keep it across re-cuts. ---------- */
+async function scanPass(parsed,rect,grid,tick,onProgress){
+  const W=parsed.width,M=parsed.frames.length;
+  const perFrame=Math.max(48,Math.min(3000,Math.ceil(30000/M)));
+  const segs=[],pts=[],stored=[];
+  let prevKey=null,n=0,gw=0,gh=0,last=null;
+  for(const fr of GIF.coalesceIter(parsed)){
+    const key=fingerprint(fr.full,W,rect);
+    if(prevKey!==null&&key===prevKey)segs[segs.length-1].holdMs+=fr.delayMs;
+    else{
+      const u=segs.length;
+      segs.push({idx:fr.i,holdMs:fr.delayMs});
+      const A=LF.boxDownscale(cropRaster(fr.full,W,rect),grid);
+      gw=A.w;gh=A.h;
+      LF.sampleInto(pts,A,perFrame,u*7);
+      if(u===0||(u&(u-1))===0)stored.push({u,A,small:LF.boxDownscale(A,96)});
+      last={u,A};
+    }
+    prevKey=key;n++;
+    if((n&15)===0){if(onProgress)onProgress(n,M);if(tick)await tick();}
+  }
+  if(last&&stored[stored.length-1].u!==last.u)stored.push({u:last.u,A:last.A,small:LF.boxDownscale(last.A,96)});
+  return {raw:M,unique:segs.length,segs,ok:Float32Array.from(pts),stored,gw,gh,grid,rect};
+}
+
+/* the kept frames for a cap — no decode; a kept frame inherits the time of every frame it stands in for */
+function planFrames(scan,cap){
+  const segs=scan.segs,U=segs.length,keep=[];
+  if(!(cap<U)){for(const s of segs)keep.push({u:segs.indexOf(s),idx:s.idx,holdMs:s.holdMs});}
+  else{
+    for(let j=0;j<cap;j++){
+      const s0=Math.floor(j*U/cap),s1=Math.floor((j+1)*U/cap);
+      let hold=0;for(let s=s0;s<s1;s++)hold+=segs[s].holdMs;
+      keep.push({u:s0,idx:segs[s0].idx,holdMs:hold});
+    }
+  }
+  let loopMs=0;for(const k of keep)loopMs+=k.holdMs;
+  return {raw:scan.raw,unique:U,keep,loopMs};
+}
+
+/* probe frames for the sweep: first, nearest stored to the middle kept frame, last stored */
+function probesFor(scan,keep){
+  const st=scan.stored;if(!st.length)return [];
+  const uMid=keep[Math.floor((keep.length-1)/2)].u;
+  let mid=st[0];for(const p of st)if(Math.abs(p.u-uMid)<Math.abs(mid.u-uMid))mid=p;
+  const out=[];for(const p of [st[0],mid,st[st.length-1]])if(!out.includes(p))out.push(p);
+  return out;
+}
+
+/* ---------- palette: fixed k, or the 10 · 14 · 18 sweep graded on the probes, knee-picked ---------- */
+async function pickPalette(scan,probes,kMode,segOpts,tick,onSweep,cancelled){
+  const {ok,gw,gh}=scan;
+  if(kMode!=="auto"){const c=LF.fitPalette(ok,kMode);return {centers:c,k:kMode,kEff:c.length,sweep:[]};}
+  const runs=[];
+  for(const k of HD.ks){
+    const c=LF.fitPalette(ok,k);
+    let sum=0,cnt=0;
+    for(const p of probes){
+      if(cancelled())throw {cancelled:true};
+      const seg=LF.segmentWith(p.A,c,segOpts);
+      sum+=LF.sanityCheck(p.small,seg.shapes,gw,gh).score;cnt++;
+      await tick();
+    }
+    runs.push({k,kEff:c.length,centers:c,score:cnt?sum/cnt:0});
+    if(onSweep)onSweep(runs.slice());
+  }
+  let best=-1;for(const r of runs)if(r.score>best)best=r.score;
+  let pick=runs[runs.length-1];
+  for(const r of runs)if(r.score>=best-HD.knee){pick=r;break;}
+  return {centers:pick.centers,k:pick.k,kEff:pick.centers.length,sweep:runs};
+}
+
+/* ---------- pass 2 · CUT — every kept frame segmented against the one palette;
+   nothing but the cut shapes is kept between frames ---------- */
+async function cutPass(parsed,keep,grid,rect,centers,segOpts,hooks){
+  const W=parsed.width,N=keep.length;
+  const tick=hooks.tick||(()=>Promise.resolve()),cancelled=hooks.cancelled||(()=>false);
+  const want=new Map();keep.forEach((k,j)=>want.set(k.idx,j));
+  const results=new Array(N);
+  let gw=0,gh=0,regions=0,verts=0,scoreSum=0,n=0;
+  for(const fr of GIF.coalesceIter(parsed)){
+    const j=want.get(fr.i);if(j===undefined)continue;
+    if(cancelled())throw {cancelled:true};
+    const t0=now();
+    const src=cropRaster(fr.full,W,rect);
+    const A=LF.boxDownscale(src,grid),small=LF.boxDownscale(src,96);
+    gw=A.w;gh=A.h;
+    if(hooks.onThumb)hooks.onThumb(j,small);
+    const seg=LF.segmentWith(A,centers,segOpts);
+    const chk=LF.sanityCheck(small,seg.shapes,gw,gh);
+    results[j]={shapes:seg.shapes,regions:seg.regions,verts:seg.verts,score:chk.score,holdMs:keep[j].holdMs,ms:now()-t0};
+    regions+=seg.regions;verts+=seg.verts;scoreSum+=chk.score;
+    if(hooks.onFrame)hooks.onFrame(j,results[j]);
+    n++;if(n===N)break;
+    await tick();
+  }
+  return {gw,gh,frames:results,regions,verts,score:N?scoreSum/N:0};
+}
+
+/* ---------- SMIL emit — one <g> per frame, one discrete opacity switch each ---------- */
+function esc(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function num(v,d){let s=v.toFixed(d);if(s.indexOf(".")>=0)s=s.replace(/0+$/,"").replace(/\.$/,"");return s;}
+const r1=LF.r1;
+function shapeSvg(s,gw,gh){
+  const f=LF.hex(s.fill);
+  if(s.type==="rect")return "<rect width=\""+gw+"\" height=\""+gh+"\" fill=\""+f+"\"/>";
+  if(s.type==="ellipse")return "<ellipse cx=\""+r1(s.cx)+"\" cy=\""+r1(s.cy)+"\" rx=\""+r1(s.rx)+"\" ry=\""+r1(s.ry)+"\" fill=\""+f+"\"/>";
+  return "<path d=\"M"+s.pts.map(p=>r1(p[0])+" "+r1(p[1])).join("L")+"Z\" fill=\""+f+"\"/>";
+}
+function emitSvg(res,meta){
+  const {gw,gh,frames}=res,N=frames.length;
+  let D=0;for(const f of frames)D+=f.holdMs;
+  const speed=meta.speed||1,durS=D/1000/speed,dur=num(durS,3)+"s";
+  const starts=[];{let acc=0;for(const f of frames){starts.push(acc/D);acc+=f.holdMs;}}
+  const kt=v=>num(v,6);
+  const p=[];
+  p.push("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+  p.push("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\""+meta.outW+"\" height=\""+meta.outH+"\" viewBox=\"0 0 "+gw+" "+gh+"\">");
+  p.push("<title>"+esc(meta.title||"zoetrope")+"</title>");
+  p.push("<"+"!-- zoetrope r3 · "+N+" frame"+(N===1?"":"s")+" · "+num(D/1000,2)+" s loop at 1× · emitted "+dur+
+    (meta.crop?" · crop "+meta.crop.w+"×"+meta.crop.h+" at "+meta.crop.x+","+meta.crop.y+" of "+meta.srcW+"×"+meta.srcH:"")+
+    " · linefinder v3 detail cut · "+gw+"×"+gh+" grid · k "+res.kEff+" · ε "+meta.eps+" · snap off · "+res.regions+
+    " regions · SMIL opacity switching, no script --"+">");
+  for(let i=0;i<N;i++){
+    const f=frames[i];
+    p.push("<g id=\"f"+i+"\""+(i?" opacity=\"0\"":"")+">");
+    if(N>1){
+      let vals,keys;
+      if(i===0){vals="1;0;0";keys="0;"+kt(starts[1])+";1";}
+      else if(i===N-1){vals="0;1;1";keys="0;"+kt(starts[i])+";1";}
+      else{vals="0;1;0;0";keys="0;"+kt(starts[i])+";"+kt(starts[i+1])+";1";}
+      p.push("<animate attributeName=\"opacity\" calcMode=\"discrete\" values=\""+vals+"\" keyTimes=\""+keys+"\" dur=\""+dur+"\" repeatCount=\"indefinite\"/>");
+    }
+    for(const s of f.shapes)p.push(shapeSvg(s,gw,gh));
+    p.push("</g>");
+  }
+  p.push("</svg>");
+  return {svg:p.join("\n"),durS,starts,loopMs:D};
+}
+
+/* ---------- the whole run. opts.scan may carry a previous scan for the same crop + grid ---------- */
+async function convert(parsed,opts,hooks){
+  hooks=hooks||{};
+  const tick=hooks.tick||(()=>Promise.resolve()),cancelled=hooks.cancelled||(()=>false);
+  const rect=normCrop(parsed,opts.crop);
+  const cap=(opts.cap==="all"||opts.cap==null)?Infinity:opts.cap;
+  const grid=opts.grid||HD.fit;
+  const segOpts={speckle:HD.speckle,eps:HD.eps,snap:HD.snap};
+  let scan=opts.scan;
+  const same=scan&&scan.grid===grid&&scan.rect.x===rect.x&&scan.rect.y===rect.y&&scan.rect.w===rect.w&&scan.rect.h===rect.h;
+  if(!same){scan=await scanPass(parsed,rect,grid,tick,hooks.onScan);if(cancelled())throw {cancelled:true};}
+  const plan=planFrames(scan,cap);
+  if(hooks.onPlanned)hooks.onPlanned(plan,scan,same);
+  const pal=await pickPalette(scan,probesFor(scan,plan.keep),opts.k||"auto",segOpts,tick,hooks.onSweep,cancelled);
+  if(hooks.onPalette)hooks.onPalette(pal);
+  const cut=await cutPass(parsed,plan.keep,grid,rect,pal.centers,segOpts,{tick,cancelled,onThumb:hooks.onThumb,onFrame:hooks.onFrame});
+  return {...cut,k:pal.k,kEff:pal.kEff,sweep:pal.sweep,plan,rect,grid,scan};
+}
+
+return {HD,normCrop,scanPass,planFrames,probesFor,pickPalette,cutPass,emitSvg,convert,fingerprint,cropRaster};
+})();
+if(typeof globalThis!=="undefined")globalThis.ZO=ZO;
+</script>
+
+<script>
+/* =====================================================================
+   GIF WRITE — new in r3. GIF89a out: one global color table, LZW with
+   the standard clear at 4096 codes, NETSCAPE loop block, one graphic
+   control per frame. Pure and node-testable; the REEL r2 decoder above
+   reads back what this writes.
+   ===================================================================== */
+const GIFW=(function(){
+"use strict";
+/* the string table: for a code and the pixel that follows it, the code of the longer string.
+   A flat table indexed by (code, pixel) — one read per pixel, no hashing; only the slots a
+   table-full wrote are wiped at each clear. */
+let tab=new Uint16Array(4096<<2),tabBits=2;
+const used=new Int32Array(4096);
+/* n color indices -> one complete image-data stream: min code size, sub-blocks, terminator */
+function lzw(px,n,mcs){
+  const clear=1<<mcs,eoi=clear+1;
+  if(tabBits!==mcs||tab.length!==(4096<<mcs)){tab=new Uint16Array(4096<<mcs);tabBits=mcs;}
+  const T=tab,U=used;
+  let cap=Math.max(256,(n>>2)+64),buf=new Uint8Array(cap),bp=0,acc=0,nb=0;
+  let size=mcs+1,next=eoi+1,nu=0;
+  const put=code=>{
+    acc|=code<<nb;nb+=size;
+    while(nb>=8){
+      if(bp===cap){const b=new Uint8Array(cap*2);b.set(buf);buf=b;cap*=2;}
+      buf[bp++]=acc&255;acc>>>=8;nb-=8;
+    }
+  };
+  put(clear);
+  if(n>0){
+    let prefix=px[0];
+    for(let i=1;i<n;i++){
+      const k=px[i],slot=(prefix<<mcs)|k,hit=T[slot];
+      if(hit!==0){prefix=hit;continue;}
+      put(prefix);
+      if(next<4096){
+        T[slot]=next;U[nu++]=slot;next++;
+        if(next>(1<<size)&&size<12)size++;
+      }else{                                   /* table full: clear and start over */
+        put(clear);for(let j=0;j<nu;j++)T[U[j]]=0;nu=0;size=mcs+1;next=eoi+1;
+      }
+      prefix=k;
+    }
+    put(prefix);
+    /* a decoder defines one more code after the last one it reads, and may widen for it */
+    if(next<4096){next++;if(next>(1<<size)&&size<12)size++;}
+  }
+  put(eoi);
+  for(let j=0;j<nu;j++)T[U[j]]=0;              /* leave the table clean for the next frame */
+  if(nb>0){
+    if(bp===cap){const b=new Uint8Array(cap+1);b.set(buf);buf=b;cap++;}
+    buf[bp++]=acc&255;
+  }
+  const out=new Uint8Array(1+bp+Math.ceil(bp/255)+1);
+  let o=0;out[o++]=mcs;
+  for(let p=0;p<bp;){const m=Math.min(255,bp-p);out[o++]=m;out.set(buf.subarray(p,p+m),o);o+=m;p+=m;}
+  out[o]=0;
+  return out;
+}
+/* color-table bits for a count of colors (1..8) */
+function bitsFor(n){let b=1;while((1<<b)<n)b++;return b;}
+/* header + logical screen + global color table (+ loop block; loop 0 = forever, null = none) */
+function header(w,h,rgb,nColors,loop){
+  const bits=bitsFor(nColors),n=1<<bits,hasLoop=loop!==null&&loop!==undefined;
+  const out=new Uint8Array(13+n*3+(hasLoop?19:0));
+  out.set([71,73,70,56,57,97,w&255,(w>>8)&255,h&255,(h>>8)&255,0xF0|(bits-1),0,0]);
+  out.set(rgb.subarray(0,Math.min(rgb.length,n*3)),13);
+  if(hasLoop)out.set([0x21,0xFF,0x0B,78,69,84,83,67,65,80,69,50,46,48,3,1,loop&255,(loop>>8)&255,0],13+n*3);
+  return out;
+}
+function gce(delayCs,transp,disposal){
+  return Uint8Array.of(0x21,0xF9,4,((disposal&7)<<2)|(transp>=0?1:0),delayCs&255,(delayCs>>8)&255,transp>=0?transp:0,0);
+}
+function desc(x,y,w,h){return Uint8Array.of(0x2C,x&255,(x>>8)&255,y&255,(y>>8)&255,w&255,(w>>8)&255,h&255,(h>>8)&255,0);}
+function comment(text){
+  const b=[];for(let i=0;i<text.length;i++){const c=text.charCodeAt(i);b.push(c>=32&&c<127?c:63);}
+  const out=new Uint8Array(2+b.length+Math.ceil(b.length/255)+1);
+  let o=0;out[o++]=0x21;out[o++]=0xFE;
+  for(let p=0;p<b.length;){const m=Math.min(255,b.length-p);out[o++]=m;for(let i=0;i<m;i++)out[o++]=b[p+i];p+=m;}
+  out[o]=0;
+  return out;
+}
+function join(parts){
+  let n=0;for(const p of parts)n+=p.length;
+  const out=new Uint8Array(n);let o=0;
+  for(const p of parts){out.set(p,o);o+=p.length;}
+  return out;
+}
+const TRAILER=Uint8Array.of(0x3B);
+return {lzw,bitsFor,header,gce,desc,comment,join,TRAILER};
+})();
+if(typeof globalThis!=="undefined")globalThis.GIFW=GIFW;
+</script>
+
+<script>
+/* =====================================================================
+   ASCII CUT — new in r3. A frame is set in type, the type is drawn back
+   into pixels, the pixels are written as a GIF.
+   · the three charsets are the ASCII RASTERIZER v2 ramps, character for
+     character; each is re-ordered by the ink its characters really carry
+     in the face below, so tone never runs backwards
+   · the face is built in — 5×7 in a 6×8 cell — so the same GIF comes out
+     of every device and the browser is never asked for a font
+   · levels, paper and the ink palette are fitted once across the reel
+   · a cell keeps last frame's character while it still fits (no shimmer,
+     and unchanged cells cost nothing in the file)
+   Pure, node-testable.
+   ===================================================================== */
+const ASC=(function(){
+"use strict";
+const CW=6,CH=8;                 /* cell, in font pixels */
+const ZX=3,ZY=4,NZ=ZX*ZY;        /* each cell is sampled as 3×4 zones */
+const SHADES=String.fromCharCode(0x2591,0x2592,0x2593,0x2588);   /* light, medium, dark shade, full block */
+const SETS={
+  standard:" .:-=+*#%@",
+  detailed:" .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+  blocks:" "+SHADES
+};
+/* the face: 95 glyphs (space .. tilde), 8 rows each, one base-32 digit per row (5 pixels, left = high bit) */
+const FONT="0000000044444040AAA00000AAVAVAA04FKE5U40OP248J30CIK8LID044800000248884208422248004LEL400044V44000000CC48000V000000000CC001248G00EHJLPHE04C4444E0EH1248V0V2421HE026AIV220VGU11HE068GUHHE0V1248880EHHEHHE0EHHF12C00CC0CC000CC0CC48248G842000V0V00084212480EH124040EH1DLLE0EHHHVHH0UHHUHHU0EHGGGHE0SIHHHIS0VGGUGGV0VGGUGGG0EHGNHHF0HHHVHHH0E44444E072222IC0HIKOKIH0GGGGGGV0HRLLHHH0HHPLJHH0EHHHHHE0UHHUGGG0EHHHLID0UHHUKIH0FGGE11U0V4444440HHHHHHE0HHHHHA40HHHLLLA0HHA4AHH0HHHA4440V1248GV0E88888E00G842100E22222E04AH00000000000V08420000000E1FHF0GGMPHHU000EGGHE011DJHHF000EHVGE0698S888000FHHF1EGGMPHHH040C444E0206222ICGGIKOKI0C44444E000QLLHH000MPHHH000EHHHE000UHHUGG00DJHF1100MPGGG000EGE1U088S8896000HHHJD000HHHA4000HHLLA000HA4AH000HHHF1E00V248V0244844204444444084424480008L2000";
+const NG=99;                     /* 95 printable ASCII, then the four shade blocks */
+const CHARS=[];for(let c=32;c<127;c++)CHARS.push(String.fromCharCode(c));
+for(const ch of SHADES)CHARS.push(ch);
+const ROWS=new Uint8Array(NG*CH);/* one 6-bit mask per pixel row, bit 5 = left pixel */
+for(let g=0;g<95;g++)for(let y=0;y<CH;y++)ROWS[g*CH+y]=parseInt(FONT[g*CH+y],32)<<1;
+for(let y=0;y<CH;y++){const odd=y&1;
+  ROWS[95*CH+y]=odd?0:42;        /* light shade: one pixel in four */
+  ROWS[96*CH+y]=odd?21:42;       /* medium shade: checker */
+  ROWS[97*CH+y]=odd?42:63;       /* dark shade: three in four */
+  ROWS[98*CH+y]=63;}             /* full block */
+const INK=new Float32Array(NG);  /* share of the cell each glyph inks, 0..1 */
+for(let g=0;g<NG;g++){let n=0;for(let y=0;y<CH;y++)for(let x=0;x<CW;x++)if((ROWS[g*CH+y]>>x)&1)n++;INK[g]=n/(CW*CH);}
+
+/* tuning — one place */
+const TUNE={
+  peak:0.3,        /* how far a cell leans toward its inkiest zone: keeps thin strokes from washing out */
+  gammaDark:1.8,   /* light type on dark paper: tone -> ink */
+  gammaLight:1.0,  /* dark type on light paper */
+  hyst:0.025,      /* a cell keeps last frame's character inside this margin (share of the ramp) */
+  inkK:62,         /* colors in the ink palette */
+  inkStick:1.6,inkSlack:90,   /* a cell keeps last frame's ink while it is this close to the best one */
+  minRange:64,     /* a reel flatter than this is not stretched to full range */
+  Q:1024           /* ramp lookup steps */
+};
+const now=()=>(typeof performance!=="undefined"?performance.now():Date.now());
+
+/* ---------- a charset as a tone ramp: characters ordered by measured ink; characters with
+   the same ink share that tone band in their rasterizer order, so all of them are used ---------- */
+function charset(name){
+  const key=SETS[name]?name:"standard",s=SETS[key],ids=[],ord=new Map();
+  for(const ch of s){const id=CHARS.indexOf(ch);if(id>=0&&!ord.has(id)){ord.set(id,ids.length);ids.push(id);}}
+  ids.sort((a,b)=>INK[a]-INK[b]||ord.get(a)-ord.get(b));
+  const full=INK[ids[ids.length-1]],Q=TUNE.Q;
+  const levels=[];
+  for(const id of ids){const L=levels[levels.length-1];if(L&&L.ink===INK[id])L.ids.push(id);else levels.push({ink:INK[id],ids:[id]});}
+  const lo=new Float32Array(NG),hi=new Float32Array(NG),lut=new Uint8Array(Q+1);
+  for(let k=0;k<levels.length;k++){
+    const a=k?(levels[k-1].ink+levels[k].ink)/2:0,b=k<levels.length-1?(levels[k].ink+levels[k+1].ink)/2:full*1.0001;
+    const n=levels[k].ids.length;
+    levels[k].ids.forEach((id,i)=>{lo[id]=a+(b-a)*i/n;hi[id]=a+(b-a)*(i+1)/n;});
+  }
+  for(let q=0;q<=Q;q++){
+    const t=full*q/Q;let pick=ids[ids.length-1];
+    for(const id of ids)if(t>=lo[id]&&t<hi[id]){pick=id;break;}
+    lut[q]=pick;
+  }
+  return {name:key,ids,full,lut,lo,hi,levels:levels.length};
+}
+
+/* ---------- geometry ---------- */
+function gridFor(rect,cols){
+  cols=Math.max(8,Math.min(400,Math.round(cols)));
+  const rows=Math.max(1,Math.round(cols*rect.h/rect.w*CW/CH));
+  return {cols,rows};
+}
+/* pixel size: "auto" = the biggest whole multiple that keeps the long side at or under 1200 px */
+function scaleFor(cols,rows,size){
+  const w=cols*CW,h=rows*CH,long=Math.max(w,h),auto=size==="auto"||!size;
+  let s=auto?Math.max(1,Math.min(4,Math.floor(1200/long))):Math.max(1,Math.round(size));
+  while(s>1&&(long*s>4096||w*h*s*s>8e6))s--;
+  return s;
+}
+
+/* ---------- zone sampler: area mean of the opaque pixels, and how much of the zone is opaque ---------- */
+function zbuf(n){return {r:new Float32Array(n),g:new Float32Array(n),b:new Float32Array(n),a:new Float32Array(n)};}
+function zones(src,zw,zh,buf){
+  const w=src.w,h=src.h,sd=src.data,R=buf.r,G=buf.g,B=buf.b,A=buf.a;
+  const xa=new Int32Array(zw),xb=new Int32Array(zw);
+  for(let zx=0;zx<zw;zx++){xa[zx]=Math.floor(zx*w/zw);xb[zx]=Math.max(xa[zx]+1,Math.floor((zx+1)*w/zw));}
+  for(let zy=0;zy<zh;zy++){
+    const y0=Math.floor(zy*h/zh),y1=Math.max(y0+1,Math.floor((zy+1)*h/zh));
+    for(let zx=0;zx<zw;zx++){
+      const x0=xa[zx],x1=xb[zx];
+      let r=0,g=0,b=0,m=0;
+      for(let y=y0;y<y1;y++){
+        let o=(y*w+x0)*4;
+        for(let x=x0;x<x1;x++,o+=4)if(sd[o+3]){r+=sd[o];g+=sd[o+1];b+=sd[o+2];m++;}
+      }
+      const i=zy*zw+zx;
+      if(m){R[i]=r/m;G[i]=g/m;B[i]=b/m;A[i]=m/((y1-y0)*(x1-x0));}else{R[i]=0;G[i]=0;B[i]=0;A[i]=0;}
+    }
+  }
+}
+function gcd(a,b){while(b){const t=a%b;a=b;b=t;}return a;}
+
+/* ---------- the reel walk. Setting type is light work, so here the reading of the GIF is the
+   cost — and every change of setting walks the reel again. This is REEL r2's coalesce, step for
+   step (same disposal rules, same tolerance of bad streams), on a table-driven LZW reader that
+   allocates nothing per code. It yields the live buffer, like r2's: take what you need from
+   `full` before asking for the next frame. ---------- */
+const PRE=new Uint16Array(4096),SUF=new Uint8Array(4096),LEN=new Uint16Array(4096),FIRST=new Uint8Array(4096);
+function unlzw(mcs,data,npix){
+  const cc=1<<mcs,eoi=cc+1,out=new Uint8Array(npix),nbytes=data.length;
+  for(let i=0;i<cc;i++){SUF[i]=i;LEN[i]=1;FIRST[i]=i;}
+  let cs=mcs+1,mask=(1<<cs)-1,next=eoi+1,prev=-1,op=0,acc=0,nb=0,ip=0;
+  while(op<npix){
+    while(nb<cs&&ip<nbytes){acc|=data[ip++]<<nb;nb+=8;}
+    if(nb<cs)break;                              /* ran out: treat as the end */
+    const code=acc&mask;acc>>>=cs;nb-=cs;
+    if(code===cc){cs=mcs+1;mask=(1<<cs)-1;next=eoi+1;prev=-1;continue;}
+    if(code===eoi)break;
+    let c,len,first;
+    if(code<next){c=code;len=LEN[c];first=FIRST[c];}
+    else if(code===next&&prev>=0){c=prev;len=LEN[prev]+1;first=FIRST[prev];}
+    else break;                                  /* corrupt stream: keep what we have */
+    let p=op+len-1;
+    if(code===next){if(p<npix)out[p]=first;p--;} /* the string that ends with its own first pixel */
+    for(let k=c;p>=op;p--){if(p<npix)out[p]=SUF[k];k=PRE[k];}
+    if(prev>=0&&next<4096){
+      PRE[next]=prev;SUF[next]=first;LEN[next]=LEN[prev]+1;FIRST[next]=FIRST[prev];next++;
+      if(next===(1<<cs)&&cs<12){cs++;mask=(1<<cs)-1;}
+    }
+    op+=len;prev=code;
+  }
+  return out;                                    /* short streams leave trailing 0s */
+}
+function deinterlace(idx,w,h){
+  const out=new Uint8Array(idx.length);let i=0;
+  for(const [a,st] of [[0,8],[4,8],[2,4],[1,2]])for(let y=a;y<h;y+=st){out.set(idx.subarray(i*w,(i+1)*w),y*w);i++;}
+  return out;
+}
+function* walk(parsed){
+  const W=parsed.width,H=parsed.height,lut=new Uint32Array(256);
+  let full=new Uint8ClampedArray(W*H*4),u32=new Uint32Array(full.buffer);
+  let prevSnap=null,lastDisp=0,lastRect=null,tMs=0,count=0;
+  for(const f of parsed.frames){
+    if(lastRect){
+      if(lastDisp===2){                          /* restore to background = transparent */
+        const x0=Math.max(0,lastRect.left),y0=Math.max(0,lastRect.top);
+        const x1=Math.min(W,lastRect.left+lastRect.w),y1=Math.min(H,lastRect.top+lastRect.h);
+        if(x1>x0)for(let y=y0;y<y1;y++)u32.fill(0,y*W+x0,y*W+x1);
+      }else if(lastDisp===3&&prevSnap){          /* restore to previous */
+        full=prevSnap.slice();u32=new Uint32Array(full.buffer);
+      }
+    }
+    if(f.disposal===3)prevSnap=full.slice();     /* save state BEFORE drawing */
+    let idx=unlzw(f.mcs,f.lzw,f.w*f.h);
+    if(f.interlaced)idx=deinterlace(idx,f.w,f.h);
+    const pal=f.palette,nc=(pal.length/3)|0,tr=f.transpIndex;
+    for(let c=0;c<256;c++)lut[c]=c<nc?(0xFF000000|pal[c*3+2]<<16|pal[c*3+1]<<8|pal[c*3])>>>0:0xFF000000;
+    const xa=Math.max(0,-f.left),xb=Math.min(f.w,W-f.left);
+    for(let y=0;y<f.h;y++){
+      const gy=f.top+y;
+      if(gy<0||gy>=H)continue;
+      let s=y*f.w+xa,o=gy*W+f.left+xa;
+      for(let x=xa;x<xb;x++,s++,o++){const c=idx[s];if(c!==tr)u32[o]=lut[c];}   /* transparent pixels leave prior content */
+    }
+    const delayMs=(f.delayCs<2?10:f.delayCs)*10; /* browser convention */
+    yield {full,tMs,delayMs,i:count};
+    count++;tMs+=delayMs;
+    lastDisp=f.disposal;lastRect={left:f.left,top:f.top,w:f.w,h:f.h};
+  }
+}
+
+/* ---------- pass 1 · SCAN — holds merged by fingerprint (r2's), a reel-wide tone histogram
+   for the levels and the paper, and a color sample for the ink palette. Depends on the
+   crop only, so it is kept while the crop stays. ---------- */
+async function scan(parsed,rect,tick,onProgress,cancelled){
+  const W=parsed.width,M=parsed.frames.length;
+  const sc=Math.min(1,96/Math.max(rect.w,rect.h));
+  const sw=Math.max(1,Math.round(rect.w*sc)),sh=Math.max(1,Math.round(rect.h*sc)),N=sw*sh;
+  const per=Math.max(32,Math.min(2000,Math.ceil(24000/M)));
+  const buf=zbuf(N),hist=new Float64Array(256),hmin=new Float64Array(256),hmax=new Float64Array(256),segs=[],rgb=[];
+  let prevKey=null,n=0,nOp=0,nTr=0,last=now();
+  for(const fr of walk(parsed)){
+    const key=ZO.fingerprint(fr.full,W,rect);
+    if(prevKey!==null&&key===prevKey)segs[segs.length-1].holdMs+=fr.delayMs;
+    else{
+      const u=segs.length;
+      segs.push({idx:fr.i,holdMs:fr.delayMs});
+      zones(ZO.cropRaster(fr.full,W,rect),sw,sh,buf);
+      for(let i=0;i<N;i++){
+        if(buf.a[i]<0.5){nTr++;continue;}
+        const r=buf.r[i],g=buf.g[i],b=buf.b[i];
+        hist[Math.min(255,Math.round(0.299*r+0.587*g+0.114*b))]++;
+        hmin[Math.round(Math.min(r,g,b))]++;hmax[Math.round(Math.max(r,g,b))]++;nOp++;
+      }
+      let stride=Math.max(1,Math.floor(N/per));
+      while(stride>1&&gcd(stride,sw)!==1)stride++;
+      for(let i=(u*7)%stride;i<N;i+=stride)if(buf.a[i]>=0.5)rgb.push(buf.r[i],buf.g[i],buf.b[i]);
+    }
+    prevKey=key;n++;
+    if(tick&&now()-last>32){if(onProgress)onProgress(n,M);await tick();last=now();if(cancelled&&cancelled())throw {cancelled:true};}
+  }
+  return {raw:M,unique:segs.length,segs,hist,hmin,hmax,nOpaque:nOp,nTransp:nTr,rgb:Uint8Array.from(rgb),rect};
+}
+
+/* ---------- the job: everything fitted once for the reel ---------- */
+function pct(hist,total,q,atLo,atHi){
+  atLo=atLo||0;atHi=atHi||0;total+=atLo+atHi;
+  if(!total)return 128;
+  let acc=atLo;const want=q*total;
+  for(let v=0;v<256;v++){acc+=hist[v];if(acc>0&&acc>=want)return v;}
+  return 255;
+}
+function prep(scan,opts,rect){
+  const inv=!!opts.inv,color=opts.ink==="color";
+  const cs=charset(opts.set);
+  const {cols,rows}=gridFor(rect,opts.cols||100);
+  let med=pct(scan.hist,scan.nOpaque,0.5);if(inv)med=255-med;
+  /* paper is the reel's own ground: a mostly light reel is set dark-on-light, a dark one
+     light-on-dark. Where the ground is transparent the subject decides, the other way round. */
+  let dark;
+  if(opts.paper==="dark")dark=true;
+  else if(opts.paper==="light")dark=false;
+  else{
+    const tf=scan.nTransp/Math.max(1,scan.nTransp+scan.nOpaque);
+    dark=tf>0.5?med>=128:med<153;
+  }
+  /* levels: the reel's 0.5 % .. 99.5 % tones become the full range. A transparent ground is
+     paper, so it is counted at the paper end. Color is levelled on its darkest and lightest
+     channels so no channel clips and hues hold. A flat reel is not blown up. */
+  const blankLo=dark!==inv,tLo=blankLo?scan.nTransp:0,tHi=blankLo?0:scan.nTransp;
+  let lo=pct(color?scan.hmin:scan.hist,scan.nOpaque,0.005,tLo,tHi),hi=pct(color?scan.hmax:scan.hist,scan.nOpaque,0.995,tLo,tHi);
+  if(hi-lo<TUNE.minRange){
+    if(blankLo){hi=Math.min(255,lo+TUNE.minRange);lo=Math.min(lo,hi-TUNE.minRange);}
+    else{lo=Math.max(0,hi-TUNE.minRange);hi=Math.max(hi,lo+TUNE.minRange);}
+  }
+  /* darkness 0..1 -> ramp step: how much ink that tone asks for on this paper */
+  const Q=TUNE.Q,curve=new Uint16Array(Q+1),ga=dark?TUNE.gammaDark:TUNE.gammaLight;
+  for(let i=0;i<=Q;i++){const d=i/Q;curve[i]=Math.round(Q*(dark?Math.pow(d,ga):1-Math.pow(1-d,ga)));}
+  /* the stroke lift only earns its keep when a zone is several source pixels; near 1:1 it would chase noise */
+  const perZone=(rect.w/(cols*ZX))*(rect.h/(rows*ZY));
+  const peak=TUNE.peak*Math.max(0,Math.min(1,(perZone-1)/3));
+  const job={cols,rows,zw:cols*ZX,zh:rows*ZY,cs,lo,hi,gain:1/(hi-lo),inv,dark,color,curve,peak,rect,med,inks:null,cube:null,nInk:1};
+  if(color)fitInks(scan,job);
+  return job;
+}
+
+/* a sample through the levels, 0..1 */
+function lvl(v,job){const t=(v-job.lo)*job.gain;return t<0?0:t>1?1:t;}
+/* INVERT on a color: lightness flips, hue and strength stay — white ground goes black, an
+   orange block stays orange. (On a gray it is the plain negative.) */
+function flip(c){const s=1-Math.max(c[0],c[1],c[2])-Math.min(c[0],c[1],c[2]);c[0]+=s;c[1]+=s;c[2]+=s;}
+/* how much ink a color asks for on this paper, and what color that ink is:
+   coverage × ink + (1 − coverage) × paper = the color, with the least ink that can do it */
+function inkOf(r,g,b,dark,out){
+  let c;
+  if(dark){c=Math.max(r,g,b);if(c<0.02){out[0]=out[1]=out[2]=1;return c;}out[0]=r/c;out[1]=g/c;out[2]=b/c;}
+  else{c=1-Math.min(r,g,b);if(c<0.02){out[0]=out[1]=out[2]=0;return c;}out[0]=1-(1-r)/c;out[1]=1-(1-g)/c;out[2]=1-(1-b)/c;}
+  return c;
+}
+function d3(r,g,b,P,i){const dr=r-P[i*3],dg=g-P[i*3+1],db=b-P[i*3+2];return 3*dr*dr+4*dg*dg+2*db*db;}
+/* ink palette: median cut over a 5-bit histogram of the reel's inks, a few Lloyd rounds, then a lookup cube */
+function fitInks(scan,job){
+  const K=TUNE.inkK,cnt=new Float64Array(32768),ink=[0,0,0],v=[0,0,0],rgb=scan.rgb;
+  for(let i=0;i+2<rgb.length;i+=3){
+    v[0]=lvl(rgb[i],job);v[1]=lvl(rgb[i+1],job);v[2]=lvl(rgb[i+2],job);if(job.inv)flip(v);
+    const c=inkOf(v[0],v[1],v[2],job.dark,ink);
+    if(c<0.06)continue;
+    cnt[(Math.min(31,(ink[0]*31.99)|0)<<10)|(Math.min(31,(ink[1]*31.99)|0)<<5)|Math.min(31,(ink[2]*31.99)|0)]+=c;
+  }
+  const bins=[];
+  for(let k=0;k<32768;k++)if(cnt[k]>0)bins.push({r:(k>>10)*8+4,g:((k>>5)&31)*8+4,b:(k&31)*8+4,n:cnt[k]});
+  if(!bins.length){const v=job.dark?252:4;bins.push({r:v,g:v,b:v,n:1});}
+  let boxes=[bins];
+  while(boxes.length<K){
+    let bi=-1,bc="r",br=0;
+    for(let i=0;i<boxes.length;i++){
+      const bx=boxes[i];if(bx.length<2)continue;
+      for(const ch of ["r","g","b"]){
+        let mn=1e9,mx=-1e9;for(const e of bx){if(e[ch]<mn)mn=e[ch];if(e[ch]>mx)mx=e[ch];}
+        if(mx-mn>br){br=mx-mn;bi=i;bc=ch;}
+      }
+    }
+    if(bi<0)break;
+    const bx=boxes[bi].slice().sort((p,q)=>p[bc]-q[bc]||p.r-q.r||p.g-q.g||p.b-q.b);
+    let tot=0;for(const e of bx)tot+=e.n;
+    let acc=0,cutAt=bx.length-1;
+    for(let i=0;i<bx.length-1;i++){acc+=bx[i].n;if(acc>=tot/2){cutAt=i+1;break;}}
+    boxes.splice(bi,1,bx.slice(0,cutAt),bx.slice(cutAt));
+  }
+  let cen=boxes.map(bx=>{let r=0,g=0,b=0,n=0;for(const e of bx){r+=e.r*e.n;g+=e.g*e.n;b+=e.b*e.n;n+=e.n;}return [r/n,g/n,b/n];});
+  const near=(r,g,b)=>{let bi=0,bd=Infinity;
+    for(let c=0;c<cen.length;c++){const dr=r-cen[c][0],dg=g-cen[c][1],db=b-cen[c][2],d=3*dr*dr+4*dg*dg+2*db*db;if(d<bd){bd=d;bi=c;}}
+    return bi;};
+  for(let it=0;it<4;it++){
+    const acc=cen.map(()=>[0,0,0,0]);
+    for(const e of bins){const a=acc[near(e.r,e.g,e.b)];a[0]+=e.r*e.n;a[1]+=e.g*e.n;a[2]+=e.b*e.n;a[3]+=e.n;}
+    cen=cen.map((c,i)=>acc[i][3]?[acc[i][0]/acc[i][3],acc[i][1]/acc[i][3],acc[i][2]/acc[i][3]]:c);
+  }
+  const inks=new Uint8Array(cen.length*3);
+  cen.forEach((c,i)=>{inks[i*3]=Math.round(c[0]);inks[i*3+1]=Math.round(c[1]);inks[i*3+2]=Math.round(c[2]);});
+  cen=cen.map((c,i)=>[inks[i*3],inks[i*3+1],inks[i*3+2]]);
+  const cube=new Uint8Array(32768);
+  for(let k=0;k<32768;k++)cube[k]=near((k>>10)*8+4,((k>>5)&31)*8+4,(k&31)*8+4);
+  job.inks=inks;job.nInk=cen.length;job.cube=cube;
+}
+
+/* ---------- one frame: zones -> a character (and an ink) for every cell ---------- */
+function workFor(job){return {buf:zbuf(job.zw*job.zh),ink:[0,0,0],v:[0,0,0]};}
+function setCells(job,wk,prev,g,c){
+  const {cols,rows,zw,cs,dark,color,curve,peak,inv}=job,Q=TUNE.Q;
+  const R=wk.buf.r,G=wk.buf.g,B=wk.buf.b,A=wk.buf.a,ink=wk.ink,v=wk.v;
+  const lut=cs.lut,glo=cs.lo,ghi=cs.hi,full=cs.full,H=TUNE.hyst*full;
+  const pg=prev?prev.g:null,pc=prev?prev.c:null;
+  for(let cy=0;cy<rows;cy++)for(let cx=0;cx<cols;cx++){
+    const i=cy*cols+cx,z0=cy*ZY*zw+cx*ZX;
+    let sum=0,mx=0,sr=0,sg=0,sb=0,sa=0;
+    for(let zy=0;zy<ZY;zy++){
+      const o=z0+zy*zw;
+      for(let zx=0;zx<ZX;zx++){
+        const z=o+zx,a=A[z];
+        if(!a)continue;
+        let d;
+        if(color){
+          v[0]=lvl(R[z],job);v[1]=lvl(G[z],job);v[2]=lvl(B[z],job);if(inv)flip(v);
+          d=dark?Math.max(v[0],v[1],v[2]):1-Math.min(v[0],v[1],v[2]);
+          sr+=v[0]*a;sg+=v[1]*a;sb+=v[2]*a;sa+=a;
+        }else{
+          let y=lvl(0.299*R[z]+0.587*G[z]+0.114*B[z],job);if(inv)y=1-y;
+          d=dark?y:1-y;
+        }
+        d*=a;sum+=d;if(d>mx)mx=d;
+      }
+    }
+    let d=sum/NZ;d+=peak*(mx-d);
+    const q=curve[(d*Q+0.5)|0],t=full*q/Q;    /* ink asked for, as a share of the cell */
+    let pick=lut[q];
+    if(pg){const p=pg[i];if(p!==pick&&t>=glo[p]-H&&t<ghi[p]+H)pick=p;}   /* stay while it still fits */
+    g[i]=pick;
+    if(color){
+      if(INK[pick]===0||!sa){c[i]=0;continue;}
+      inkOf(sr/sa,sg/sa,sb/sa,dark,ink);
+      const ri=ink[0]*255,gi=ink[1]*255,bi=ink[2]*255;
+      let k=job.cube[(Math.min(31,ri>>3)<<10)|(Math.min(31,gi>>3)<<5)|Math.min(31,bi>>3)];
+      if(pc&&INK[pg[i]]>0){                    /* same rule for the ink */
+        const p=pc[i];
+        if(p!==k&&d3(ri,gi,bi,job.inks,p)<=d3(ri,gi,bi,job.inks,k)*TUNE.inkStick+TUNE.inkSlack)k=p;
+      }
+      c[i]=k;
+    }
+  }
+}
+
+/* source thumbnail for the strip, out of the zones already sampled (transparent shows as white) */
+function thumbOf(job,wk){
+  const {zw,zh}=job,sc=Math.min(1,96/Math.max(zw,zh));
+  const w=Math.max(1,Math.round(zw*sc)),h=Math.max(1,Math.round(zh*sc));
+  const out=new Uint8ClampedArray(w*h*4),R=wk.buf.r,G=wk.buf.g,B=wk.buf.b,A=wk.buf.a;
+  for(let y=0;y<h;y++){
+    const y0=Math.floor(y*zh/h),y1=Math.max(y0+1,Math.floor((y+1)*zh/h));
+    for(let x=0;x<w;x++){
+      const x0=Math.floor(x*zw/w),x1=Math.max(x0+1,Math.floor((x+1)*zw/w));
+      let r=0,g=0,b=0,n=0;
+      for(let yy=y0;yy<y1;yy++)for(let xx=x0;xx<x1;xx++){const i=yy*zw+xx,a=A[i],k=255*(1-a);r+=R[i]*a+k;g+=G[i]*a+k;b+=B[i]*a+k;n++;}
+      const o=(y*w+x)*4;out[o]=r/n;out[o+1]=g/n;out[o+2]=b/n;out[o+3]=255;
+    }
+  }
+  return {w,h,data:out};
+}
+
+/* ---------- cells -> pixels. dst is the encoder's index plane (Uint8Array; skip = the
+   transparent index, written over cells that did not change) or the screen (Uint32Array;
+   skip < 0 leaves unchanged cells alone). One loop for both, so the stage shows the file. ---------- */
+function blit(dst,stride,ox,oy,cols,f,prev,x0,y0,x1,y1,S,paper,inks,skip){
+  const cw=CW*S,ch=CH*S,fg=f.g,fc=f.c,pg=prev?prev.g:null,pc=prev?prev.c:null;
+  let bx0=1e9,by0=1e9,bx1=-1,by1=-1;
+  for(let cy=y0;cy<y1;cy++)for(let cx=x0;cx<x1;cx++){
+    const i=cy*cols+cx,g=fg[i];
+    const same=pg!==null&&pg[i]===g&&(fc===null||pc[i]===fc[i]);
+    if(same&&skip<0)continue;
+    const base=(cy-oy)*ch*stride+(cx-ox)*cw;
+    if(same){for(let y=0;y<ch;y++){const p=base+y*stride;for(let x=0;x<cw;x++)dst[p+x]=skip;}continue;}
+    const ink=inks[fc?fc[i]:0];
+    for(let gy=0;gy<CH;gy++){
+      const m=ROWS[g*CH+gy];
+      for(let s=0;s<S;s++){
+        let p=base+(gy*S+s)*stride;
+        for(let b=CW-1;b>=0;b--){const v=(m>>b)&1?ink:paper;for(let e=0;e<S;e++)dst[p++]=v;}
+      }
+    }
+    if(cx<bx0)bx0=cx;if(cx>bx1)bx1=cx;if(cy<by0)by0=cy;if(cy>by1)by1=cy;
+  }
+  return bx1<0?null:{x0:bx0,y0:by0,x1:bx1+1,y1:by1+1};
+}
+
+/* ---------- the GIF, frame by frame. Each frame after the first is written as the box of
+   cells that changed, with the cells inside it that did not change left transparent; a frame
+   that sets to the same type as the one before it becomes a longer hold. ---------- */
+function encoder(cols,rows,S,nInk){
+  const W=cols*CW*S,H=rows*CH*S,transp=nInk+1,total=nInk+2;
+  const bits=GIFW.bitsFor(total),mcs=Math.max(2,bits);
+  const inkIdx=new Uint8Array(nInk);for(let i=0;i<nInk;i++)inkIdx[i]=i+1;
+  const blocks=[];let prev=null,px=null,bytes=0;
+  function add(f,j){
+    let x0=cols,y0=rows,x1=-1,y1=-1;
+    if(!prev){x0=0;y0=0;x1=cols-1;y1=rows-1;}
+    else{
+      const a=f.g,b=prev.g,ac=f.c,bc=prev.c;
+      for(let cy=0;cy<rows;cy++)for(let cx=0;cx<cols;cx++){
+        const i=cy*cols+cx;
+        if(a[i]!==b[i]||(ac!==null&&ac[i]!==bc[i])){if(cx<x0)x0=cx;if(cx>x1)x1=cx;if(cy<y0)y0=cy;if(cy>y1)y1=cy;}
+      }
+    }
+    if(x1<0){blocks[blocks.length-1].holds.push(f.holdMs);return null;}
+    const bw=(x1-x0+1)*CW*S,bh=(y1-y0+1)*CH*S;
+    if(!px)px=new Uint8Array(W*H);
+    blit(px,bw,x0,y0,cols,f,prev,x0,y0,x1+1,y1+1,S,0,inkIdx,transp);
+    const data=GIFW.lzw(px,bw*bh,mcs);
+    const blk={j,x:x0*CW*S,y:y0*CH*S,w:bw,h:bh,data,first:!prev,holds:[f.holdMs]};
+    blocks.push(blk);bytes+=data.length+18;prev=f;
+    return blk;
+  }
+  /* assemble: header, table, loop, then every block with its delay. Speed and colors live
+     only here, so both can change without setting or packing anything again.
+     rgb = paper then the inks, 3 bytes each. */
+  function finish(o){
+    const speed=o.speed||1,pal=new Uint8Array((1<<bits)*3);
+    pal.set(o.rgb.subarray(0,(nInk+1)*3));
+    pal.set(o.rgb.subarray(0,3),transp*3);
+    const parts=[GIFW.header(W,H,pal,1<<bits,0)];
+    if(o.comment)parts.push(GIFW.comment(o.comment));
+    const starts=[],delays=[];let acc=0,sent=0;
+    for(const b of blocks){
+      let hold=0;for(const h of b.holds)hold+=h;
+      acc+=hold/speed;
+      let cs=Math.round((acc-sent)/10);if(cs<2)cs=2;if(cs>65535)cs=65535;
+      let t=sent;for(const h of b.holds){starts.push(t);t+=cs*10*(hold?h/hold:1/b.holds.length);}
+      sent+=cs*10;delays.push(cs);
+      parts.push(GIFW.gce(cs,b.first?-1:transp,1),GIFW.desc(b.x,b.y,b.w,b.h),b.data);
+    }
+    parts.push(GIFW.TRAILER);
+    let size=0;for(const p of parts)size+=p.length;
+    return {parts,size,delays,loopMs:sent,durS:sent/1000,starts:starts.map(t=>t/sent),written:blocks.length};
+  }
+  return {add,finish,blocks,W,H,S,cols,rows,nInk,transp,bits,mcs,size:()=>bytes};
+}
+
+/* a frame as text: the rasterizer's export, one line per row */
+function text(f,cols,rows){
+  let s="";
+  for(let y=0;y<rows;y++){let line="";for(let x=0;x<cols;x++)line+=CHARS[f.g[y*cols+x]];s+=line+"\n";}
+  return s;
+}
+
+/* ---------- pass 2 · CUT — every kept frame set in type and packed; only the type and
+   the packed bytes are kept between frames ---------- */
+async function cut(parsed,keep,job,S,hooks){
+  const W=parsed.width,N=keep.length,{cols,rows,zw,zh}=job;
+  const tick=hooks.tick,cancelled=hooks.cancelled||(()=>false);
+  const want=new Map();keep.forEach((k,j)=>want.set(k.idx,j));
+  const wk=workFor(job),enc=encoder(cols,rows,S,job.nInk),frames=new Array(N);
+  let prev=null,n=0,last=now();
+  for(const fr of walk(parsed)){
+    const j=want.get(fr.i);
+    if(j!==undefined){
+      if(cancelled())throw {cancelled:true};
+      zones(ZO.cropRaster(fr.full,W,job.rect),zw,zh,wk.buf);
+      const f={g:new Uint8Array(cols*rows),c:job.color?new Uint8Array(cols*rows):null,holdMs:keep[j].holdMs};
+      setCells(job,wk,prev,f.g,f.c);
+      frames[j]=f;
+      const blk=enc.add(f,j);
+      if(hooks.onThumb)hooks.onThumb(j,thumbOf(job,wk));
+      if(hooks.onFrame)hooks.onFrame(j,f,blk,enc);
+      prev=f;n++;
+      if(n===N)break;
+    }
+    if(tick&&now()-last>32){await tick();last=now();if(cancelled())throw {cancelled:true};}
+  }
+  return {frames,enc};
+}
+/* same type, new pixel size: pack again, no reel walk */
+async function repack(res,S,hooks){
+  hooks=hooks||{};
+  const enc=encoder(res.cols,res.rows,S,res.job.nInk);
+  let last=now();
+  for(let j=0;j<res.frames.length;j++){
+    if(hooks.cancelled&&hooks.cancelled())throw {cancelled:true};
+    enc.add(res.frames[j],j);
+    if(hooks.onFrame)hooks.onFrame(j);
+    if(hooks.tick&&now()-last>32){await hooks.tick();last=now();}
+  }
+  return enc;
+}
+
+/* ---------- colors: paper, then the inks ---------- */
+const LOOKS={
+  mono:{dark:[[26,26,26],[245,245,240]],light:[[245,245,240],[26,26,26]]},
+  green:{dark:[[9,18,12],[66,240,116]],light:[[245,245,240],[10,100,42]]},
+  amber:{dark:[[20,13,4],[255,176,0]],light:[[245,245,240],[194,65,12]]}
+};
+function colors(job,ink){
+  const side=job.dark?"dark":"light";
+  if(job.color){
+    const out=new Uint8Array((job.nInk+1)*3);
+    out.set(LOOKS.mono[side][0]);out.set(job.inks,3);
+    return out;
+  }
+  const L=LOOKS[ink]||LOOKS.mono;
+  return Uint8Array.from([...L[side][0],...L[side][1]]);
+}
+
+/* ---------- the whole run. opts.scan may carry a previous scan of the same crop ---------- */
+async function convert(parsed,opts,hooks){
+  hooks=hooks||{};
+  const tick=hooks.tick||null,cancelled=hooks.cancelled||(()=>false);
+  const rect=ZO.normCrop(parsed,opts.crop);
+  let sc=opts.scan;
+  const same=!!sc&&sc.rect.x===rect.x&&sc.rect.y===rect.y&&sc.rect.w===rect.w&&sc.rect.h===rect.h;
+  if(!same){sc=await scan(parsed,rect,tick,hooks.onScan,cancelled);if(cancelled())throw {cancelled:true};}
+  const cap=(opts.cap==="all"||opts.cap==null)?Infinity:opts.cap;
+  const plan=ZO.planFrames(sc,cap);
+  const job=prep(sc,opts,rect);
+  const S=scaleFor(job.cols,job.rows,opts.size);
+  if(hooks.onPlanned)hooks.onPlanned(plan,sc,same,job,S);
+  const {frames,enc}=await cut(parsed,plan.keep,job,S,{tick,cancelled,onThumb:hooks.onThumb,onFrame:hooks.onFrame});
+  return {kind:"ascii",frames,enc,job,plan,rect,scan:sc,cols:job.cols,rows:job.rows};
+}
+
+return {CW,CH,SETS,CHARS,ROWS,INK,TUNE,LOOKS,charset,gridFor,scaleFor,zones,zbuf,unlzw,walk,scan,prep,cut,repack,encoder,blit,text,colors,convert};
+})();
+if(typeof globalThis!=="undefined")globalThis.ASC=ASC;
+</script>
+
+<script>
+/* =====================================================================
+   UI — FIELDSCREEN
+   r3: one stage, two outputs. The SVG path is r2's, line for line; the
+   ASCII path runs beside it and shares the stage, crop, strip and
+   transport.
+   ===================================================================== */
+(function(){
+"use strict";
+const $=id=>document.getElementById(id);
+const ui={stage:$("stage"),view:$("view"),host:$("svgHost"),cv:$("asc"),peek:$("peek"),empty:$("empty"),prog:$("progBar"),status:$("status"),readout:$("readout"),
+  open:$("btnOpen"),cropBtn:$("btnCrop"),conv:$("btnConvert"),save:$("btnSave"),copy:$("btnCopy"),file:$("file"),
+  cropUI:$("cropUI"),cropBox:$("cropBox"),cropLbl:$("cropLbl"),cropClear:$("btnCropClear"),cropCancel:$("btnCropCancel"),cropApply:$("btnCropApply"),
+  prev:$("prev"),next:$("next"),play:$("play"),counter:$("counter"),strip:$("strip")};
+const settings={out:"ascii",speed:1,
+  grid:224,k:"auto",cap:96,                                         /* SVG */
+  cols:100,set:"standard",ink:"color",paper:"auto",inv:0,size:"auto",acap:"all"};   /* ASCII */
+const HD=ZO.HD;
+let gifFile=null,gifUrl=null,parsed=null,result=null,emitted=null,svgEl=null,scanCache=null,ascScan=null;
+let crop=null;                 /* applied crop, GIF px, null = full frame */
+let cropMode=false,rect=null;  /* crop editing */
+let run=null,runSeq=0,playing=true,cur=-1,rafId=0,cutTimer=0;
+const isAscii=()=>settings.out==="ascii";
+
+const tick=()=>new Promise(r=>{if(document.hidden)setTimeout(r,0);else requestAnimationFrame(()=>setTimeout(r,0));});
+/* the ASCII run works in short slices and only steps aside between them: a message to itself
+   lets the page paint and take a tap, without the idle wait of a timer (or its throttling
+   when the screen is off) */
+const breatheQ=[],breatheCh=new MessageChannel();
+breatheCh.port1.onmessage=()=>{const r=breatheQ.shift();if(r)r();};
+const breathe=()=>new Promise(r=>{breatheQ.push(r);breatheCh.port2.postMessage(0);});
+function setStatus(t,err){ui.status.textContent=t;ui.status.classList.toggle("err",!!err);}
+function setProgress(f){ui.prog.style.transform="scaleX("+Math.max(0,Math.min(1,f)).toFixed(4)+")";}
+function fmtKB(n){return n<1024?Math.round(n)+" B":n<1048576?(n/1024).toFixed(1)+" KB":(n/1048576).toFixed(2)+" MB";}
+function fmtS(s){return s<90?Math.round(s)+" s":Math.floor(s/60)+" m "+Math.round(s%60)+" s";}
+function baseName(){return gifFile?gifFile.name.replace(/\.gif$/i,""):"reel";}
+function fullRect(){return {x:0,y:0,w:parsed.width,h:parsed.height};}
+function isFull(r){return r.x===0&&r.y===0&&r.w===parsed.width&&r.h===parsed.height;}
+
+/* ---- view geometry: the box is the crop, the peek img is the whole GIF slid under it.
+   ar overrides the box shape (the ASCII stage is a whole number of cells, a hair off the crop) ---- */
+function setView(r,ar){
+  ar=ar||r.w/r.h;
+  ui.view.style.aspectRatio=ar.toFixed(5);
+  ui.view.style.maxWidth="calc(62vh * "+ar.toFixed(4)+")";
+  const W=parsed.width,H=parsed.height;
+  ui.peek.style.width=(W/r.w*100).toFixed(4)+"%";ui.peek.style.height=(H/r.h*100).toFixed(4)+"%";
+  ui.peek.style.left=(-r.x/r.w*100).toFixed(4)+"%";ui.peek.style.top=(-r.y/r.h*100).toFixed(4)+"%";
+}
+function asciiAspect(cols,rows){return (cols*ASC.CW)/(rows*ASC.CH);}
+function showResultView(){
+  if(result.kind==="ascii")setView(result.rect,asciiAspect(result.cols,result.rows));else setView(result.rect);
+  sharpen();
+}
+
+/* ---- settings ---- */
+function applyMode(){
+  document.body.classList.toggle("m-ascii",isAscii());document.body.classList.toggle("m-svg",!isAscii());
+  ui.copy.textContent=isAscii()?"COPY FRAME AS TEXT":"COPY SVG TO CLIPBOARD";
+}
+document.querySelectorAll(".seg").forEach(seg=>{
+  const key=seg.dataset.key;
+  seg.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
+    let v=b.dataset.v;if(v!==""&&!isNaN(Number(v)))v=Number(v);
+    const was=settings[key];
+    settings[key]=v;
+    seg.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));
+    if(key==="out"){if(was!==v){applyMode();if(parsed)convert();}return;}
+    if(key==="speed"){if(result&&!run)reEmit();return;}          /* a run in flight reads the new speed when it lands */
+    if(!parsed)return;
+    if(!isAscii()){if(!run)setStatus("Settings changed — CONVERT to re-cut the reel.");return;}
+    if(was===v)return;
+    /* ASCII is quick to set, so a change is simply carried out */
+    if(key==="ink"&&(was==="color")===(v==="color")){if(result&&!run)reEmit();return;}   /* mono inks: a new color table, nothing else */
+    if(key==="size"&&result&&!run){repack();return;}                                    /* same type, new pixel size */
+    clearTimeout(cutTimer);cutTimer=setTimeout(convert,160);
+  }));
+});
+
+/* ---- open / drop ---- */
+ui.open.addEventListener("click",()=>ui.file.click());
+ui.stage.addEventListener("click",()=>{if(!parsed)ui.file.click();});
+ui.file.addEventListener("change",()=>{const f=ui.file.files&&ui.file.files[0];if(f)loadFile(f);ui.file.value="";});
+["dragenter","dragover"].forEach(ev=>document.addEventListener(ev,e=>{e.preventDefault();ui.stage.classList.add("drag");}));
+document.addEventListener("dragleave",e=>{if(e.target===document.documentElement||e.relatedTarget===null)ui.stage.classList.remove("drag");});
+document.addEventListener("drop",e=>{e.preventDefault();ui.stage.classList.remove("drag");
+  const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f)loadFile(f);});
+
+async function loadFile(f){
+  clearTimeout(cutTimer);
+  if(run)run.cancelled=true;
+  if(cropMode)exitCrop();
+  gifFile=f;crop=null;scanCache=null;ascScan=null;
+  if(gifUrl)URL.revokeObjectURL(gifUrl);
+  gifUrl=URL.createObjectURL(f);ui.peek.src=gifUrl;
+  stopTracker();result=null;emitted=null;svgEl=null;ui.host.innerHTML="";
+  ui.save.disabled=true;ui.copy.disabled=true;ui.cropBtn.disabled=true;ui.readout.textContent="";transportEnable(false);
+  ui.stage.classList.remove("done");ui.strip.innerHTML="";ui.view.classList.remove("asc");
+  setStatus("DECODING "+f.name+" · "+fmtKB(f.size)+" …");
+  await tick();
+  try{
+    const buf=await f.arrayBuffer();
+    parsed=GIF.parseGif(new Uint8Array(buf));
+  }catch(err){parsed=null;setStatus(String(err&&err.message||err).toUpperCase(),true);ui.conv.disabled=true;return;}
+  if(Math.max(parsed.width,parsed.height)<32){parsed=null;setStatus("GIF TOO SMALL — 32 px long side minimum",true);ui.conv.disabled=true;return;}
+  ui.empty.style.display="none";ui.stage.classList.remove("empty");
+  ui.view.classList.add("on");setView(fullRect());
+  ui.conv.disabled=false;ui.cropBtn.disabled=false;
+  convert();
+}
+
+/* ---- the run ---- */
+ui.conv.addEventListener("click",()=>{if(run)run.cancelled=true;else convert();});
+function busy(me){
+  ui.conv.textContent="STOP";ui.conv.classList.add("warn");ui.conv.disabled=false;ui.cropBtn.disabled=true;
+  ui.save.disabled=true;ui.copy.disabled=true;transportEnable(false);
+}
+function idle(me){
+  if(run!==me)return;
+  run=null;ui.conv.textContent="CONVERT";ui.conv.classList.remove("warn");ui.conv.disabled=!parsed;ui.cropBtn.disabled=!parsed;
+}
+function failed(me,err){
+  if(run!==me)return;                       /* a newer run owns the stage now */
+  if(err&&err.cancelled){setStatus("STOPPED");setProgress(0);return;}
+  console.error(err);setStatus("ERROR — "+(err&&err.message||err),true);
+}
+async function convert(){
+  if(!parsed)return;
+  clearTimeout(cutTimer);
+  if(run)run.cancelled=true;
+  const me=run={cancelled:false,id:++runSeq};
+  busy(me);
+  stopTracker();result=null;emitted=null;svgEl=null;ui.host.innerHTML="";
+  const rect0=ZO.normCrop(parsed,crop);
+  setView(rect0);ui.view.classList.add("src");ui.view.classList.remove("peek","asc");ui.stage.classList.remove("done");
+  ui.readout.textContent="";setProgress(0);ui.strip.innerHTML="";
+  try{
+    if(isAscii())await runAscii(me);else await runSvg(me);
+  }catch(err){failed(me,err);}
+  finally{idle(me);}
+}
+
+/* ---- SVG: r2's run, unchanged ---- */
+async function runSvg(me){
+  const cancelled=()=>me.cancelled;
+  let N=0,cutT0=0;
+  setStatus(scanCache?"PLANNING THE REEL …":"SCANNING THE REEL …");await tick();
+  const res=await ZO.convert(parsed,{crop,cap:settings.cap,grid:settings.grid,k:settings.k,scan:scanCache},{
+    tick,cancelled,
+    onScan:(n,M)=>{if(!me.cancelled)setStatus("SCANNING · "+n+" / "+M+" frames read · merging holds, sampling the palette");},
+    onPlanned:(plan,scan,reused)=>{if(me.cancelled)return;scanCache=scan;N=plan.keep.length;buildStrip(N);
+      setStatus("REEL · "+plan.raw+" in · "+plan.unique+" unique · "+N+" kept · "+(plan.loopMs/1000).toFixed(2)+" s loop"+(reused?" · scan reused":"")+" · "+
+        (settings.k==="auto"?"sweeping k 10 · 14 · 18 …":"fitting k "+settings.k+" …"));},
+    onSweep:runs=>{if(!me.cancelled)setStatus("PALETTE SWEEP · "+runs.map(r=>"k "+r.kEff+" → "+(r.score*100).toFixed(1)+"%").join(" · ")+(runs.length<HD.ks.length?" · …":""));},
+    onPalette:p=>{if(me.cancelled)return;cutT0=performance.now();setStatus("k "+p.kEff+(p.sweep.length?" picked (knee)":"")+" · cutting frame 1 / "+N+" …");},
+    onThumb:(j,small)=>{if(!me.cancelled)drawThumb(j,small);},
+    onFrame:(j,r)=>{if(me.cancelled)return;
+      markDone(j);setProgress((j+1)/N);
+      const per=(performance.now()-cutT0)/(j+1),left=per*(N-j-1)/1000;
+      setStatus("CUT "+(j+1)+" / "+N+" · "+r.regions+" regions · match "+(r.score*100).toFixed(1)+"%"+(j+1<N?" · ~"+fmtS(left)+" left":""));}
+  });
+  if(me.cancelled)return;
+  result=res;
+  reEmit();
+}
+
+/* ---- ASCII: scan (kept per crop) · set every kept frame in type · pack.
+   The page is brought up to date about three times a second, not once a frame: on a slow
+   phone redrawing the page costs more than setting a frame does. ---- */
+async function runAscii(me){
+  const cancelled=()=>me.cancelled;
+  let N=0,t0=0,lastUi=0,dims="",thumbs=[],lastJ=-1,lastF=null;
+  const flush=()=>{
+    for(const [j,small] of thumbs){drawThumb(j,small);markDone(j);}
+    thumbs=[];
+    if(lastJ<0)return;
+    setProgress((lastJ+1)/N);
+    screenPaint(lastF);                                       /* watch the reel being set */
+    const left=(performance.now()-t0)/(lastJ+1)*(N-lastJ-1)/1000;
+    setStatus("SET "+(lastJ+1)+" / "+N+" · "+dims+(lastJ+1<N&&left>=1?" · ~"+fmtS(left)+" left":""));
+  };
+  setStatus(ascScan?"PLANNING THE REEL …":"SCANNING THE REEL …");await tick();
+  const res=await ASC.convert(parsed,{crop,cap:settings.acap,cols:settings.cols,set:settings.set,paper:settings.paper,ink:settings.ink,inv:settings.inv,
+    size:settings.size,scan:ascScan},{
+    tick:breathe,cancelled,
+    onScan:(n,M)=>{if(me.cancelled)return;
+      const t=performance.now();if(t-lastUi<350)return;lastUi=t;
+      setStatus("SCANNING · "+n+" / "+M+" frames read · merging holds, reading the reel's tones");},
+    onPlanned:(plan,scan,reused,job,S)=>{if(me.cancelled)return;
+      ascScan=scan;N=plan.keep.length;buildStrip(N);t0=performance.now();
+      dims=job.cols+" × "+job.rows+" characters";
+      setView(job.rect,asciiAspect(job.cols,job.rows));ui.view.classList.add("asc");ui.view.classList.remove("src");
+      screenInit(job.cols,job.rows,ASC.colors(job,settings.ink));
+      setStatus("REEL · "+plan.raw+" in · "+plan.unique+" unique · "+N+" kept"+(reused?" · scan reused":"")+" · setting "+dims+" …");},
+    onThumb:(j,small)=>{if(!me.cancelled)thumbs.push([j,small]);},
+    onFrame:(j,f)=>{if(me.cancelled)return;
+      lastJ=j;lastF=f;
+      const t=performance.now();
+      if(t-lastUi>350||j===N-1){lastUi=t;flush();}}
+  });
+  if(me.cancelled)return;
+  flush();
+  result=res;
+  reEmit();
+}
+/* SIZE: the type is already set, so only the pixels are packed again */
+async function repack(){
+  if(!result||result.kind!=="ascii")return;
+  clearTimeout(cutTimer);
+  if(run)run.cancelled=true;
+  const me=run={cancelled:false,id:++runSeq},res=result,N=res.frames.length;
+  busy(me);stopTracker();
+  try{
+    const S=ASC.scaleFor(res.cols,res.rows,settings.size);
+    setStatus("PACKING AT "+S+"× …");setProgress(0);await tick();
+    const enc=await ASC.repack(res,S,{tick:breathe,cancelled:()=>me.cancelled,onFrame:j=>{if(!me.cancelled&&((j&7)===7||j===N-1)){setProgress((j+1)/N);setStatus("PACK "+(j+1)+" / "+N+" at "+S+"×");}}});
+    if(me.cancelled||result!==res)return;
+    res.enc=enc;
+    reEmit();
+  }catch(err){
+    failed(me,err);
+    if(run===me&&result===res&&emitted){ui.save.disabled=false;ui.copy.disabled=false;transportEnable(true);startTracker();}   /* the last good pack is still on the stage */
+  }finally{idle(me);}
+}
+
+/* ---- emit + mount ---- */
+function reEmit(){
+  if(!result||!parsed)return;
+  if(result.kind==="ascii"){reEmitAscii();return;}
+  const r=result.rect;
+  emitted=ZO.emitSvg(result,{outW:r.w,outH:r.h,speed:settings.speed,title:baseName()+" — zoetrope",eps:HD.eps,
+    crop:r.full?null:r,srcW:parsed.width,srcH:parsed.height});
+  mountSvg(emitted.svg);
+  const N=result.frames.length,bytes=new Blob([emitted.svg]).size;
+  ui.readout.textContent=N+" frame"+(N===1?"":"s")+" · "+emitted.durS.toFixed(2)+" s loop"+(r.full?"":" · crop "+r.w+"×"+r.h)+" · "+result.gw+"×"+result.gh+
+    " grid · k "+result.kEff+" · "+result.regions.toLocaleString()+" regions · match "+(result.score*100).toFixed(1)+"% · "+fmtKB(bytes);
+  ui.save.disabled=false;ui.copy.disabled=false;transportEnable(true);
+  setView(r);ui.view.classList.remove("src");ui.stage.classList.add("done");
+  setStatus("DONE · SAVE, or tap the stage to pause and step through the reel.");
+  setProgress(1);
+}
+function mountSvg(svg){
+  stopTracker();
+  ui.view.classList.remove("asc");
+  ui.host.innerHTML=svg.replace(/^<\?xml[^>]*\?>\s*/,"");
+  svgEl=ui.host.querySelector("svg");
+  svgEl.removeAttribute("width");svgEl.removeAttribute("height");
+  svgEl.setAttribute("preserveAspectRatio","xMidYMid meet");
+  playing=true;ui.play.textContent="PAUSE";cur=-1;
+  startTracker();
+}
+function reEmitAscii(){
+  const res=result,r=res.rect,job=res.job,enc=res.enc,N=res.frames.length;
+  const inkName=job.color?job.nInk+" inks":settings.ink==="mono"?"mono":settings.ink;
+  const o=enc.finish({speed:settings.speed,rgb:ASC.colors(job,settings.ink),
+    comment:"zoetrope r3 | ascii gif | "+res.cols+"x"+res.rows+" characters | "+job.cs.name+" | "+(job.dark?"dark":"light")+" paper | "+inkName});
+  emitted={kind:"ascii",parts:o.parts,size:o.size,durS:o.durS,starts:o.starts,loopMs:o.loopMs,written:o.written};
+  ui.view.classList.add("asc");ui.view.classList.remove("src");
+  setView(r,asciiAspect(res.cols,res.rows));
+  screenInit(res.cols,res.rows,ASC.colors(job,settings.ink));screenPaint(res.frames[0]);
+  playing=true;ui.play.textContent="PAUSE";cur=-1;clockAt=0;clockT0=performance.now();
+  ui.readout.textContent=N+" frame"+(N===1?"":"s")+" · "+o.durS.toFixed(2)+" s loop"+(r.full?"":" · crop "+r.w+"×"+r.h)+" · "+res.cols+" × "+res.rows+
+    " characters · "+enc.W+" × "+enc.H+" px · "+(job.dark?"dark":"light")+" paper · "+inkName+(o.written<N?" · "+(N-o.written)+" held":"")+" · "+fmtKB(o.size);
+  ui.save.disabled=false;ui.copy.disabled=false;transportEnable(true);
+  ui.stage.classList.add("done");
+  const held=typeof settings.size==="number"&&enc.S<settings.size;      /* a frame this big is not written: say so */
+  setStatus("DONE · SAVE the GIF, or tap the stage to pause and step through the reel."+(held?" SIZE held at "+enc.S+"× — "+settings.size+"× would pass 8 megapixels a frame.":""));
+  setProgress(1);
+  startTracker();
+}
+
+/* ---- the ASCII stage: a canvas painted by the same loop that packs the file, at the smallest
+   whole multiple of the type that covers the stage's device pixels (so strokes stay even on any
+   screen). Only cells that changed since the frame on show are touched. ---- */
+const scr={ctx:null,img:null,u32:null,cols:0,rows:0,k:1,rgb:null,paper:0,inks:null,shown:null};
+function rgba(p,i){return (255<<24|p[i*3+2]<<16|p[i*3+1]<<8|p[i*3])>>>0;}
+function stageScale(cols,rows){
+  const w=ui.view.getBoundingClientRect().width*(window.devicePixelRatio||1),W1=cols*ASC.CW,H1=rows*ASC.CH;
+  let k=Math.max(1,Math.min(4,Math.ceil(w/W1-0.02)));
+  while(k>1&&W1*H1*k*k>4.2e6)k--;
+  return k;
+}
+function screenInit(cols,rows,rgb){
+  const k=stageScale(cols,rows),W=cols*ASC.CW*k,H=rows*ASC.CH*k;
+  if(ui.cv.width!==W||ui.cv.height!==H||!scr.ctx){ui.cv.width=W;ui.cv.height=H;scr.ctx=ui.cv.getContext("2d");scr.img=scr.ctx.createImageData(W,H);scr.u32=new Uint32Array(scr.img.data.buffer);}
+  scr.cols=cols;scr.rows=rows;scr.k=k;scr.rgb=rgb;scr.paper=rgba(rgb,0);
+  scr.inks=new Uint32Array(rgb.length/3-1);for(let i=0;i<scr.inks.length;i++)scr.inks[i]=rgba(rgb,i+1);
+  scr.u32.fill(scr.paper);scr.shown=null;
+  scr.ctx.putImageData(scr.img,0,0);
+}
+function screenPaint(f){
+  if(!scr.ctx||f===scr.shown)return;
+  const k=scr.k,cw=ASC.CW*k,ch=ASC.CH*k;
+  const b=ASC.blit(scr.u32,scr.cols*cw,0,0,scr.cols,f,scr.shown,0,0,scr.cols,scr.rows,k,scr.paper,scr.inks,-1);
+  scr.shown=f;
+  if(b)scr.ctx.putImageData(scr.img,0,0,b.x0*cw,b.y0*ch,(b.x1-b.x0)*cw,(b.y1-b.y0)*ch);
+}
+/* the stage changed size (rotation, window): pick the multiple again and repaint the frame on show */
+function sharpen(){
+  if(!scr.ctx||!scr.rgb||!ui.view.classList.contains("asc"))return;
+  if(stageScale(scr.cols,scr.rows)===scr.k)return;
+  const f=scr.shown;screenInit(scr.cols,scr.rows,scr.rgb);if(f)screenPaint(f);
+}
+window.addEventListener("resize",sharpen);
+
+/* ---- playback: the SVG's own timeline, or a wall clock for the ASCII reel ---- */
+let clockT0=0,clockAt=0;
+function clockNow(){
+  if(emitted.kind==="ascii")return playing?(performance.now()-clockT0)/1000:clockAt;
+  if(!svgEl)return null;
+  try{return svgEl.getCurrentTime();}catch(e){return null;}
+}
+function clockPause(){if(emitted.kind==="ascii")clockAt=clockNow();else svgEl.pauseAnimations();}
+function clockPlay(){if(emitted.kind==="ascii")clockT0=performance.now()-clockAt*1000;else svgEl.unpauseAnimations();}
+function clockSeek(t){if(emitted.kind==="ascii"){clockAt=t;clockT0=performance.now()-t*1000;}else svgEl.setCurrentTime(t);}
+function frameAt(t){
+  const durS=emitted.durS,u=(((t%durS)+durS)%durS)/durS,st=emitted.starts;
+  let lo=0,hi=st.length-1;
+  while(lo<hi){const mid=(lo+hi+1)>>1;if(st[mid]<=u)lo=mid;else hi=mid-1;}
+  return lo;
+}
+function track(){
+  rafId=requestAnimationFrame(track);
+  if(!emitted)return;
+  const t=clockNow();if(t===null)return;
+  const i=frameAt(t);if(i!==cur)setCur(i);
+}
+function startTracker(){stopTracker();rafId=requestAnimationFrame(track);}
+function stopTracker(){if(rafId)cancelAnimationFrame(rafId);rafId=0;}
+function setCur(i){
+  const kids=ui.strip.children;
+  if(cur>=0&&kids[cur])kids[cur].classList.remove("cur");
+  cur=i;
+  const N=emitted?emitted.starts.length:0;
+  ui.counter.textContent=(i+1)+" / "+N;
+  if(result&&result.kind==="ascii"&&result.frames[i])screenPaint(result.frames[i]);
+  const el=kids[i];if(!el)return;
+  el.classList.add("cur");
+  const L=el.offsetLeft,R=L+el.offsetWidth,sl=ui.strip.scrollLeft,vw=ui.strip.clientWidth;
+  if(L<sl)ui.strip.scrollLeft=L-6;else if(R>sl+vw)ui.strip.scrollLeft=R-vw+6;
+}
+function ready(){return !!emitted&&(emitted.kind==="ascii"||!!svgEl);}
+function togglePlay(){
+  if(!ready())return;
+  if(playing){clockPause();playing=false;ui.play.textContent="PLAY";}
+  else{clockPlay();playing=true;ui.play.textContent="PAUSE";}
+}
+function seek(i){
+  if(!ready())return;
+  const N=emitted.starts.length;i=((i%N)+N)%N;
+  if(playing){clockPause();playing=false;ui.play.textContent="PLAY";}
+  clockSeek(emitted.starts[i]*emitted.durS+0.001);
+  setCur(i);
+}
+function transportEnable(on){ui.prev.disabled=ui.next.disabled=ui.play.disabled=!on;if(!on)ui.counter.textContent="— / —";}
+ui.prev.addEventListener("click",()=>seek(cur-1));
+ui.next.addEventListener("click",()=>seek(cur+1));
+ui.play.addEventListener("click",togglePlay);
+
+/* stage: tap = pause / play · hold = peek at the source GIF */
+let pressTimer=0,peeking=false,pressed=false;
+ui.stage.addEventListener("pointerdown",e=>{
+  if(!result||run||cropMode||e.button)return;
+  pressed=true;clearTimeout(pressTimer);
+  pressTimer=setTimeout(()=>{peeking=true;ui.view.classList.add("peek");},320);
+});
+function endPress(tap){
+  if(!pressed)return;pressed=false;clearTimeout(pressTimer);
+  const wasPeek=peeking;
+  if(peeking){peeking=false;ui.view.classList.remove("peek");}
+  if(tap&&!wasPeek)togglePlay();
+}
+ui.stage.addEventListener("pointerup",()=>endPress(true));
+ui.stage.addEventListener("pointercancel",()=>endPress(false));
+ui.stage.addEventListener("pointerleave",()=>endPress(false));
+ui.stage.addEventListener("contextmenu",e=>{if(parsed)e.preventDefault();});
+
+/* ---- crop mode: set on the source, in GIF pixels; applied at the cut ---- */
+const MIN_SIDE=32;
+ui.cropBtn.addEventListener("click",()=>{if(parsed&&!run)enterCrop();});
+function enterCrop(){
+  clearTimeout(cutTimer);
+  cropMode=true;rect=crop?{...crop}:fullRect();
+  stopTracker();
+  if(ready()&&playing){clockPause();playing=false;ui.play.textContent="PLAY";}
+  transportEnable(false);
+  document.body.classList.add("cropping");
+  setView(fullRect());ui.view.classList.add("src","crop");ui.view.classList.remove("peek");ui.stage.classList.remove("done");
+  layoutCrop();
+  setStatus("CROP · drag the edges, drag inside to move, drag on the dark to draw a new box · APPLY + CUT re-cuts the reel at the crop.");
+}
+function exitCrop(){
+  cropMode=false;rect=null;
+  document.body.classList.remove("cropping");
+  ui.view.classList.remove("crop");
+  if(result){ui.view.classList.remove("src");showResultView();ui.stage.classList.add("done");transportEnable(true);startTracker();}
+  else{setView(ZO.normCrop(parsed,crop));}
+}
+function clampRect(r){
+  const W=parsed.width,H=parsed.height;
+  r.w=Math.max(1,Math.min(W,Math.round(r.w)));r.h=Math.max(1,Math.min(H,Math.round(r.h)));
+  r.x=Math.max(0,Math.min(W-r.w,Math.round(r.x)));r.y=Math.max(0,Math.min(H-r.h,Math.round(r.y)));
+  return r;
+}
+function layoutCrop(){
+  const W=parsed.width,H=parsed.height,s=ui.cropBox.style;
+  s.left=(rect.x/W*100)+"%";s.top=(rect.y/H*100)+"%";s.width=(rect.w/W*100)+"%";s.height=(rect.h/H*100)+"%";
+  ui.cropLbl.textContent=rect.w+" × "+rect.h+(isFull(rect)?" · FULL":"  ·  "+rect.x+","+rect.y);
+}
+let drag=null;
+function gifPt(e){const b=ui.view.getBoundingClientRect();return {x:(e.clientX-b.left)*parsed.width/b.width,y:(e.clientY-b.top)*parsed.height/b.height};}
+ui.cropUI.addEventListener("pointerdown",e=>{
+  if(!cropMode||e.button)return;
+  e.stopPropagation();e.preventDefault();
+  const h=e.target.closest(".ch"),pt=gifPt(e);
+  let mode;
+  if(h)mode=h.dataset.h;
+  else if(e.target===ui.cropBox||ui.cropBox.contains(e.target))mode="move";
+  else{mode="draw";rect={x:Math.round(pt.x),y:Math.round(pt.y),w:1,h:1};}
+  drag={mode,start:pt,orig:{...rect}};
+  ui.cropUI.setPointerCapture(e.pointerId);
+});
+ui.cropUI.addEventListener("pointermove",e=>{
+  if(!drag)return;
+  const pt=gifPt(e),dx=pt.x-drag.start.x,dy=pt.y-drag.start.y,o=drag.orig,W=parsed.width,H=parsed.height;
+  let r={...o};
+  switch(drag.mode){
+    case "move":r.x=o.x+dx;r.y=o.y+dy;break;
+    case "n":{const y1=o.y+o.h;r.y=Math.min(y1-1,Math.max(0,o.y+dy));r.h=y1-r.y;break;}
+    case "s":r.h=Math.max(1,Math.min(H-o.y,o.h+dy));break;
+    case "w":{const x1=o.x+o.w;r.x=Math.min(x1-1,Math.max(0,o.x+dx));r.w=x1-r.x;break;}
+    case "e":r.w=Math.max(1,Math.min(W-o.x,o.w+dx));break;
+    case "draw":{const x0=Math.max(0,Math.min(drag.start.x,pt.x)),y0=Math.max(0,Math.min(drag.start.y,pt.y));
+      const x1=Math.min(W,Math.max(drag.start.x,pt.x)),y1=Math.min(H,Math.max(drag.start.y,pt.y));
+      r={x:x0,y:y0,w:Math.max(1,x1-x0),h:Math.max(1,y1-y0)};break;}
+  }
+  rect=clampRect(r);layoutCrop();
+});
+function endDrag(e){
+  if(!drag)return;drag=null;
+  try{ui.cropUI.releasePointerCapture(e.pointerId);}catch(x){}
+  if(Math.max(rect.w,rect.h)<MIN_SIDE){               /* too small to cut: grow to the floor, centred where it was */
+    const cx=rect.x+rect.w/2,cy=rect.y+rect.h/2,sc=MIN_SIDE/Math.max(rect.w,rect.h);
+    rect=clampRect({w:rect.w*sc,h:rect.h*sc,x:cx-rect.w*sc/2,y:cy-rect.h*sc/2});
+  }
+  layoutCrop();
+}
+ui.cropUI.addEventListener("pointerup",endDrag);
+ui.cropUI.addEventListener("pointercancel",endDrag);
+ui.cropClear.addEventListener("click",()=>{rect=fullRect();layoutCrop();});
+ui.cropCancel.addEventListener("click",()=>exitCrop());
+ui.cropApply.addEventListener("click",()=>{
+  crop=isFull(rect)?null:{...rect};
+  exitCrop();
+  convert();
+});
+
+/* ---- strip ---- */
+function buildStrip(n){
+  ui.strip.innerHTML="";
+  const frag=document.createDocumentFragment();
+  for(let j=0;j<n;j++){
+    const b=document.createElement("button");b.className="thumb";b.type="button";
+    const c=document.createElement("canvas");c.width=1;c.height=1;b.appendChild(c);
+    const s=document.createElement("span");s.textContent=j+1;b.appendChild(s);
+    b.addEventListener("click",()=>{if(result&&!run&&!cropMode)seek(j);});
+    frag.appendChild(b);
+  }
+  ui.strip.appendChild(frag);
+}
+function drawThumb(j,small){
+  const b=ui.strip.children[j];if(!b)return;
+  const c=b.firstChild;c.width=small.w;c.height=small.h;
+  c.getContext("2d").putImageData(new ImageData(small.data,small.w,small.h),0,0);
+  b.classList.add("has");
+}
+function markDone(j){const b=ui.strip.children[j];if(b)b.classList.add("done");}
+
+/* ---- save / copy ---- */
+function download(blob,name){
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},60000);   /* a big GIF on a slow phone needs longer than an SVG did */
+  setStatus("SAVED "+name+" · "+fmtKB(blob.size));
+}
+ui.save.addEventListener("click",()=>{
+  if(!emitted)return;
+  if(emitted.kind==="ascii")download(new Blob(emitted.parts,{type:"image/gif"}),baseName()+"-ascii.gif");
+  else download(new Blob([emitted.svg],{type:"image/svg+xml"}),baseName()+"-zoetrope.svg");
+});
+async function copyText(text,okMsg){
+  try{await navigator.clipboard.writeText(text);setStatus(okMsg);}
+  catch(e){
+    const ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";ta.style.opacity="0";
+    document.body.appendChild(ta);ta.select();
+    let ok=false;try{ok=document.execCommand("copy");}catch(e2){}
+    ta.remove();setStatus(ok?okMsg:"COPY BLOCKED BY THE BROWSER — use SAVE",!ok);
+  }
+}
+ui.copy.addEventListener("click",()=>{
+  if(!emitted)return;
+  if(emitted.kind==="ascii"){
+    const i=Math.max(0,cur),f=result.frames[i];
+    copyText(ASC.text(f,result.cols,result.rows),"FRAME "+(i+1)+" COPIED AS TEXT · "+result.cols+" × "+result.rows+" characters");
+  }else copyText(emitted.svg,"SVG COPIED · "+fmtKB(new Blob([emitted.svg]).size));
+});
+
+applyMode();
+})();
+</script>
+</body>
+</html>
