@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ASCII RASTERIZER v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #F5F5F0; color: #1A1A1A;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+
+  .header {
+    padding: 16px 20px 12px;
+    border-bottom: 2px solid #1A1A1A;
+  }
+  .header h1 { font-size: 28px; font-weight: 700; letter-spacing: 1px; }
+  .header .sub { font-size: 14px; color: #888888; margin-top: 2px; }
+
+  .drop-zone {
+    margin: 16px 20px;
+    border: 2px dashed #CCCCCC;
+    border-radius: 4px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    min-height: 120px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .drop-zone.active { border-color: #008800; background: #f0f8f0; }
+  .drop-zone.has-image { padding: 12px; border-style: solid; border-color: #CCCCCC; }
+  .drop-zone .icon { font-size: 36px; margin-bottom: 8px; }
+  .drop-zone .label { font-size: 20px; color: #555555; }
+  .drop-zone .hint { font-size: 14px; color: #888888; margin-top: 4px; }
+  .drop-zone canvas { max-width: 100%; max-height: 140px; image-rendering: pixelated; }
+
+  .controls { padding: 0 20px; display: flex; flex-direction: column; gap: 12px; }
+  .control-row { display: flex; align-items: center; gap: 12px; }
+  .control-row label { font-size: 14px; color: #555555; min-width: 70px; flex-shrink: 0; }
+  .control-row input[type="range"] { flex: 1; height: 44px; accent-color: #1A1A1A; }
+  .control-row .val { font-size: 20px; font-weight: 700; min-width: 50px; text-align: right; }
+
+  .charset-row { display: flex; gap: 8px; }
+  .charset-btn {
+    flex: 1; height: 56px; border: 2px solid #CCCCCC; border-radius: 4px;
+    background: #F5F5F0; font-size: 16px; font-weight: 600;
+    font-family: inherit; cursor: pointer; color: #1A1A1A;
+  }
+  .charset-btn.active { border-color: #1A1A1A; background: #1A1A1A; color: #F5F5F0; }
+  .charset-btn.sm { height: 48px; font-size: 14px; }
+
+  .actions { padding: 12px 20px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    flex: 1; min-width: 120px; height: 64px; border: 2px solid #1A1A1A; border-radius: 4px;
+    background: #1A1A1A; color: #F5F5F0; font-size: 20px; font-weight: 700;
+    font-family: inherit; cursor: pointer; letter-spacing: 0.5px;
+  }
+  .btn:disabled { opacity: 0.3; cursor: default; }
+  .btn.secondary { background: #F5F5F0; color: #1A1A1A; }
+  .btn.simplify { background: #008800; border-color: #008800; color: #F5F5F0; }
+
+  .section-label {
+    padding: 12px 20px 4px;
+    font-size: 14px; font-weight: 700; color: #888888;
+    letter-spacing: 2px; text-transform: uppercase;
+  }
+
+  .output-wrap {
+    margin: 4px 20px 12px;
+    border: 1px solid #CCCCCC; border-radius: 4px;
+    background: #1A1A1A; overflow: auto;
+  }
+  .output-wrap pre {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 6px; line-height: 7px;
+    color: #E0E0E0; padding: 8px;
+    white-space: pre; letter-spacing: 1px;
+    user-select: all;
+  }
+  .output-wrap.simplified { background: #0A0A0A; }
+  .output-wrap.simplified pre { color: #FFFFFF; }
+
+  .size-info { padding: 2px 20px 0; font-size: 14px; color: #888888; text-align: right; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: #008800; color: #F5F5F0;
+    padding: 12px 24px; border-radius: 4px;
+    font-size: 18px; font-weight: 600;
+    pointer-events: none; opacity: 0;
+    transition: transform 0.2s, opacity 0.2s; z-index: 100;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  .simplify-controls { padding: 0 20px; display: flex; flex-direction: column; gap: 12px; }
+
+  .pipeline-indicator {
+    padding: 8px 20px; font-size: 14px;
+    color: #008800; font-weight: 600;
+  }
+  .pipeline-indicator .a { color: #888888; }
+
+  @media (min-width: 600px) {
+    .output-wrap pre { font-size: 8px; line-height: 9px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>ASCII RASTERIZER</h1>
+  <div class="sub">Image → ASCII → Simplify. Trust the tool.</div>
+</div>
+
+<div class="drop-zone" id="dropZone">
+  <div class="icon">📷</div>
+  <div class="label">Tap to load image</div>
+  <div class="hint">or drag & drop — PNG, JPEG, GIF, WebP</div>
+</div>
+<input type="file" id="fileInput" accept="image/*" style="display:none">
+
+<div class="controls" id="controls" style="display:none">
+  <div class="control-row">
+    <label>WIDTH</label>
+    <input type="range" id="widthSlider" min="20" max="200" value="80">
+    <span class="val" id="widthVal">80</span>
+  </div>
+  <div class="control-row">
+    <label>CHARSET</label>
+    <div class="charset-row">
+      <button class="charset-btn active" data-set="standard">Standard</button>
+      <button class="charset-btn" data-set="detailed">Detailed</button>
+      <button class="charset-btn" data-set="blocks">Blocks</button>
+    </div>
+  </div>
+  <div class="control-row">
+    <label>INVERT</label>
+    <div class="charset-row">
+      <button class="charset-btn sm active" data-inv="0">Normal</button>
+      <button class="charset-btn sm" data-inv="1">Inverted</button>
+    </div>
+  </div>
+</div>
+
+<div class="actions" id="actions" style="display:none">
+  <button class="btn secondary" id="btnCopy">COPY</button>
+  <button class="btn" id="btnExport">EXPORT .TXT</button>
+</div>
+
+<div class="section-label" id="pass1Label" style="display:none">PASS 1 — SOURCE</div>
+<div class="size-info" id="sizeInfo" style="display:none"></div>
+<div class="output-wrap" id="outputWrap" style="display:none">
+  <pre id="asciiOutput"></pre>
+</div>
+
+<div class="actions" id="simplifyActions" style="display:none">
+  <button class="btn simplify" id="btnSimplify">⬇ SIMPLIFY</button>
+</div>
+
+<div id="simplifiedSection" style="display:none">
+  <div class="pipeline-indicator" id="pipelineInfo"></div>
+  <div class="simplify-controls">
+    <div class="control-row">
+      <label>BLOCK W</label>
+      <input type="range" id="simpWidthSlider" min="16" max="120" value="48">
+      <span class="val" id="simpWidthVal">48</span>
+    </div>
+    <div class="control-row">
+      <label>PASSES</label>
+      <div class="charset-row">
+        <button class="charset-btn sm active" data-passes="1">1×</button>
+        <button class="charset-btn sm" data-passes="2">2×</button>
+        <button class="charset-btn sm" data-passes="3">3×</button>
+      </div>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn secondary" id="btnCopySimp">COPY</button>
+    <button class="btn" id="btnExportSimp">EXPORT .TXT</button>
+  </div>
+  <div class="size-info" id="simpSizeInfo"></div>
+  <div class="output-wrap simplified" id="simpOutputWrap">
+    <pre id="simpOutput"></pre>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<canvas id="workCanvas" style="display:none"></canvas>
+
+<script>
+'use strict';
+
+// ── Charsets ──
+const CHARSETS = {
+  standard: ' .:-=+*#%@',
+  detailed: " .'`^\",:;Il!i><~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$",
+  blocks:   ' ░▒▓█'
+};
+
+// Build reverse brightness tables: char → 0..1 brightness
+// 0 = darkest (most ink), 1 = lightest (space)
+function buildCharBrightness(charsetName) {
+  const chars = CHARSETS[charsetName];
+  const map = {};
+  const len = chars.length;
+  for (let i = 0; i < len; i++) {
+    // index 0 = space = brightest (1.0), last = darkest (0.0)
+    map[chars[i]] = 1.0 - (i / (len - 1));
+  }
+  return map;
+}
+
+// ── State ──
+let currentCharset = 'standard';
+let currentWidth = 80;
+let inverted = false;
+let loadedImage = null;
+let lastAsciiText = '';
+let lastAsciiCols = 0;
+let simpWidth = 48;
+let simpPasses = 1;
+
+const $ = id => document.getElementById(id);
+const workCanvas = $('workCanvas');
+const workCtx = workCanvas.getContext('2d', { willReadFrequently: true });
+
+// ── Drop zone ──
+const dropZone = $('dropZone');
+const fileInput = $('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('active'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('active'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('active');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadFile(f);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) loadFile(fileInput.files[0]);
+});
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      loadedImage = img;
+      showPreview(img);
+      // Show all stage-1 UI
+      $('controls').style.display = '';
+      $('actions').style.display = '';
+      $('pass1Label').style.display = '';
+      $('sizeInfo').style.display = '';
+      $('outputWrap').style.display = '';
+      $('simplifyActions').style.display = '';
+      // Hide stage-2 until requested
+      $('simplifiedSection').style.display = 'none';
+      render();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function showPreview(img) {
+  dropZone.classList.add('has-image');
+  const c = document.createElement('canvas');
+  const maxW = dropZone.clientWidth - 24, maxH = 140;
+  const s = Math.min(maxW / img.width, maxH / img.height, 1);
+  c.width = Math.round(img.width * s);
+  c.height = Math.round(img.height * s);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  dropZone.innerHTML = '';
+  dropZone.appendChild(c);
+  const info = document.createElement('div');
+  info.className = 'hint';
+  info.textContent = img.width + '×' + img.height + ' — tap to change';
+  info.style.marginTop = '8px';
+  dropZone.appendChild(info);
+}
+
+// ── Controls ──
+$('widthSlider').addEventListener('input', function() {
+  currentWidth = parseInt(this.value);
+  $('widthVal').textContent = currentWidth;
+  render();
+});
+
+document.querySelectorAll('.charset-btn[data-set]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.charset-btn[data-set]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentCharset = btn.dataset.set;
+    render();
+  });
+});
+
+document.querySelectorAll('[data-inv]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-inv]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    inverted = btn.dataset.inv === '1';
+    render();
+  });
+});
+
+// ── Core rasterizer: canvas pixels → ASCII ──
+function rasterize(srcCanvas, cols, charsetName, doInvert) {
+  const chars = CHARSETS[charsetName];
+  const len = chars.length;
+  const charAspect = 0.5; // chars ~2× taller than wide
+  const rows = Math.max(1, Math.round((cols / srcCanvas.width) * srcCanvas.height * charAspect));
+
+  workCanvas.width = cols;
+  workCanvas.height = rows;
+  workCtx.drawImage(srcCanvas, 0, 0, cols, rows);
+
+  const px = workCtx.getImageData(0, 0, cols, rows).data;
+  let ascii = '';
+  for (let y = 0; y < rows; y++) {
+    let line = '';
+    for (let x = 0; x < cols; x++) {
+      const i = (y * cols + x) * 4;
+      const r = px[i], g = px[i+1], b = px[i+2], a = px[i+3];
+      // Luminance, alpha-composited against white
+      const lum = (0.299*r + 0.587*g + 0.114*b) * (a/255) + 255*(1 - a/255);
+      let norm = lum / 255; // 0=black 1=white
+      if (doInvert) norm = 1 - norm;
+      const ci = Math.min(Math.floor((1 - norm) * len), len - 1);
+      line += chars[ci];
+    }
+    ascii += line + '\n';
+  }
+  return { ascii, cols, rows };
+}
+
+// ── ASCII → grayscale density bitmap (NO font rendering) ──
+// Each character maps to a grayscale value based on its position in the charset.
+// One pixel per character. Pure data, no fonts, no text, guaranteed output.
+function asciiToBitmap(asciiText, charsetName) {
+  const lines = asciiText.split('\n').filter(l => l.length > 0);
+  if (lines.length === 0) return null;
+
+  const cols = lines[0].length;
+  const rows = lines.length;
+  const brightMap = buildCharBrightness(charsetName);
+
+  // Create a canvas with 1px per character
+  const bmp = document.createElement('canvas');
+  bmp.width = cols;
+  bmp.height = rows;
+  const bCtx = bmp.getContext('2d');
+  const imgData = bCtx.createImageData(cols, rows);
+  const d = imgData.data;
+
+  for (let y = 0; y < rows; y++) {
+    const line = lines[y];
+    for (let x = 0; x < cols; x++) {
+      const ch = x < line.length ? line[x] : ' ';
+      // Look up brightness; default to 1.0 (white) for unknown chars
+      const b = brightMap[ch] !== undefined ? brightMap[ch] : 1.0;
+      const v = Math.round(b * 255);
+      const i = (y * cols + x) * 4;
+      d[i] = v;     // R
+      d[i+1] = v;   // G
+      d[i+2] = v;   // B
+      d[i+3] = 255; // A
+    }
+  }
+
+  bCtx.putImageData(imgData, 0, 0);
+  return bmp;
+}
+
+// ── Pass 1: source image → ASCII ──
+function render() {
+  if (!loadedImage) return;
+
+  const src = document.createElement('canvas');
+  src.width = loadedImage.width;
+  src.height = loadedImage.height;
+  src.getContext('2d').drawImage(loadedImage, 0, 0);
+
+  const result = rasterize(src, currentWidth, currentCharset, inverted);
+  lastAsciiText = result.ascii;
+  lastAsciiCols = result.cols;
+
+  const out = $('asciiOutput');
+  out.textContent = result.ascii;
+
+  const wrapW = $('outputWrap').clientWidth - 16;
+  const fs = Math.max(3, Math.min(12, wrapW / (result.cols * 0.62)));
+  out.style.fontSize = fs.toFixed(1) + 'px';
+  out.style.lineHeight = (fs * 1.15).toFixed(1) + 'px';
+
+  $('sizeInfo').textContent = result.cols + '×' + result.rows +
+    ' chars · ' + result.ascii.length.toLocaleString() + ' bytes';
+}
+
+// ── Simplify pipeline ──
+function runSimplify() {
+  if (!lastAsciiText) return;
+
+  // Step 1: convert current ASCII to a density bitmap (no fonts!)
+  let bitmap = asciiToBitmap(lastAsciiText, currentCharset);
+  if (!bitmap) return;
+
+  // Step 2: re-rasterize that bitmap into block chars (repeat for N passes)
+  let result;
+  for (let pass = 0; pass < simpPasses; pass++) {
+    result = rasterize(bitmap, simpWidth, 'blocks', false);
+    if (pass < simpPasses - 1) {
+      // Convert this pass's output to bitmap for next pass
+      bitmap = asciiToBitmap(result.ascii, 'blocks');
+      if (!bitmap) break;
+    }
+  }
+
+  const out = $('simpOutput');
+  out.textContent = result.ascii;
+
+  // Scale font — use rAF to ensure layout is ready
+  requestAnimationFrame(() => {
+    const wrapW = $('simpOutputWrap').clientWidth - 16;
+    const fs = Math.max(4, Math.min(14, wrapW / (result.cols * 0.62)));
+    out.style.fontSize = fs.toFixed(1) + 'px';
+    out.style.lineHeight = (fs * 1.15).toFixed(1) + 'px';
+  });
+
+  const bytes = new Blob([result.ascii]).size;
+  $('simpSizeInfo').textContent = result.cols + '×' + result.rows +
+    ' blocks · ' + bytes.toLocaleString() + ' bytes';
+
+  $('pipelineInfo').innerHTML =
+    'SOURCE <span class="a">→</span> DENSITY MAP <span class="a">→</span> ' +
+    (simpPasses > 1 ? 'RE-RASTERIZE ×' + simpPasses : 'RE-RASTERIZE') +
+    ' <span class="a">→</span> BLOCKS ' + result.cols + '×' + result.rows;
+}
+
+// ── Simplify button ──
+$('btnSimplify').addEventListener('click', () => {
+  const sec = $('simplifiedSection');
+  sec.style.display = '';
+  // Wait one frame for layout, then run pipeline
+  requestAnimationFrame(() => {
+    runSimplify();
+    sec.scrollIntoView({ behavior: 'smooth' });
+  });
+});
+
+// Simplify controls
+$('simpWidthSlider').addEventListener('input', function() {
+  simpWidth = parseInt(this.value);
+  $('simpWidthVal').textContent = simpWidth;
+  if ($('simplifiedSection').style.display !== 'none') runSimplify();
+});
+
+document.querySelectorAll('[data-passes]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-passes]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    simpPasses = parseInt(btn.dataset.passes);
+    if ($('simplifiedSection').style.display !== 'none') runSimplify();
+  });
+});
+
+// ── Export ──
+function copyText(text, label) {
+  navigator.clipboard.writeText(text)
+    .then(() => toast('Copied ' + label))
+    .catch(() => toast('Select and copy manually'));
+}
+function exportTxt(text, filename) {
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Exported ' + filename);
+}
+
+$('btnCopy').addEventListener('click', () => copyText($('asciiOutput').textContent, 'ASCII'));
+$('btnExport').addEventListener('click', () => exportTxt($('asciiOutput').textContent, 'ascii-art.txt'));
+$('btnCopySimp').addEventListener('click', () => copyText($('simpOutput').textContent, 'simplified'));
+$('btnExportSimp').addEventListener('click', () => exportTxt($('simpOutput').textContent, 'ascii-simplified.txt'));
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+window.addEventListener('resize', () => {
+  clearTimeout(window._rz);
+  window._rz = setTimeout(() => {
+    render();
+    if ($('simplifiedSection').style.display !== 'none') runSimplify();
+  }, 100);
+});
+</script>
+</body>
+</html>
